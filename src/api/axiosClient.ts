@@ -126,3 +126,4 @@ return {
 Authorization: `Bearer ${readToken()}`,
 };
 }
+console.log("TOKEN:", localStorage.getItem("cjw-token"));
