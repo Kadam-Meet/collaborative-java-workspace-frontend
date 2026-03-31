@@ -1,10 +1,12 @@
+import { getTokenStorageKey, waitForAuthInitialization } from "@/lib/authSession";
+
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
 if (!API_BASE_URL) {
 throw new Error("VITE_API_BASE_URL is not defined. Please set it in your environment variables.");
 }
 
-const TOKEN_KEY = "cjw-token";
+const TOKEN_KEY = getTokenStorageKey();
 
 type ErrorPayload = {
 message?: string;
@@ -67,11 +69,15 @@ type RequestOptions = RequestInit & {
 auth?: boolean;
 };
 
-function buildHeaders(inputHeaders?: HeadersInit, auth?: boolean): Headers {
-const headers = new Headers({
-"Content-Type": "application/json",
-...(inputHeaders || {}),
-});
+function buildHeaders(inputHeaders?: HeadersInit, auth?: boolean, body?: BodyInit | null): Headers {
+const headers = new Headers(inputHeaders || {});
+
+const hasBody = body != null;
+const isFormData = typeof FormData !== "undefined" && body instanceof FormData;
+
+if (hasBody && !isFormData && !headers.has("Content-Type")) {
+headers.set("Content-Type", "application/json");
+}
 
 if (auth) {
 headers.set("Authorization", `Bearer ${readToken()}`);
@@ -81,9 +87,13 @@ return headers;
 }
 
 export async function apiJson<T>(path: string, options?: RequestOptions): Promise<T> {
+if (options?.auth) {
+await waitForAuthInitialization();
+}
+
 const response = await fetch(`${API_BASE_URL}${path}`, {
 ...options,
-headers: buildHeaders(options?.headers, options?.auth),
+headers: buildHeaders(options?.headers, options?.auth, options?.body),
 });
 
 if (!response.ok) {
@@ -102,9 +112,13 @@ export async function apiBlob(
 path: string,
 options?: RequestOptions
 ): Promise<{ blob: Blob; response: Response }> {
+if (options?.auth) {
+await waitForAuthInitialization();
+}
+
 const response = await fetch(`${API_BASE_URL}${path}`, {
 ...options,
-headers: buildHeaders(options?.headers, options?.auth),
+headers: buildHeaders(options?.headers, options?.auth, options?.body),
 });
 
 if (!response.ok) {
@@ -126,4 +140,3 @@ return {
 Authorization: `Bearer ${readToken()}`,
 };
 }
-console.log("TOKEN:", localStorage.getItem("cjw-token"));

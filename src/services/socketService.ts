@@ -1,5 +1,6 @@
+import { readStoredToken } from "@/lib/authSession";
+
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "";
-const TOKEN_KEY = "cjw-token";
 
 export interface RoomRealtimeEvent {
 	type: string;
@@ -15,7 +16,7 @@ export interface SocketHandlers {
 }
 
 export function connectRoomStream(roomId: number, handlers: SocketHandlers): () => void {
-	const token = localStorage.getItem(TOKEN_KEY);
+	const token = readStoredToken();
 	if (!token) {
 		throw new Error("Missing auth token for realtime stream");
 	}

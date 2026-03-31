@@ -1,4 +1,4 @@
-import { apiJson, authJsonHeaders } from "@/api/axiosClient";
+import { apiJson } from "@/api/axiosClient";
 
 export interface AuthUser {
 	name: string;
@@ -48,7 +48,6 @@ export async function meApi(token: string): Promise<AuthUser> {
 	const data = await apiJson<AuthResponse>("/api/auth/me", {
 		method: "GET",
 		headers: {
-			...authJsonHeaders(),
 			Authorization: `Bearer ${token}`,
 		},
 	});
@@ -58,9 +57,8 @@ export async function meApi(token: string): Promise<AuthUser> {
 export async function updateMeApi(payload: UpdateMePayload): Promise<AuthUser> {
 	const data = await apiJson<AuthResponse>("/api/auth/me", {
 		method: "PUT",
-		headers: authJsonHeaders(),
 		body: JSON.stringify(payload),
-		auth: false,
+		auth: true,
 	});
 	return { name: data.name, email: data.email };
 }
@@ -68,7 +66,6 @@ export async function updateMeApi(payload: UpdateMePayload): Promise<AuthUser> {
 export async function deleteMeApi(): Promise<void> {
 	await apiJson<void>("/api/auth/me", {
 		method: "DELETE",
-		headers: authJsonHeaders(),
-		auth: false,
+		auth: true,
 	});
 }

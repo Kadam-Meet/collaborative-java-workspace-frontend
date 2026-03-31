@@ -8,16 +8,22 @@ import { getNotifications, markAllNotificationsRead, markNotificationRead } from
 import type { NotificationItem } from "@/types/workspace.types";
 import { getUserFriendlyErrorMessage } from "@/hooks/useToast";
 import { toast } from "sonner";
+import { useAuth } from "@/hooks/useAuth";
 
 const REFRESH_MS = 15000;
 
 const NotificationCenter = () => {
+  const { loading: authLoading, isAuthenticated } = useAuth();
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [unreadCount, setUnreadCount] = useState(0);
   const [items, setItems] = useState<NotificationItem[]>([]);
 
   const loadNotifications = async () => {
+    if (authLoading || !isAuthenticated) {
+      return;
+    }
+
     try {
       const data = await getNotifications(20, false);
       setUnreadCount(data.unreadCount);
@@ -30,19 +36,24 @@ const NotificationCenter = () => {
   };
 
   useEffect(() => {
+    if (authLoading || !isAuthenticated) {
+      return;
+    }
+
+    setLoading(true);
     void loadNotifications();
     const intervalId = window.setInterval(() => {
       void loadNotifications();
     }, REFRESH_MS);
 
     return () => window.clearInterval(intervalId);
-  }, []);
+  }, [authLoading, isAuthenticated]);
 
   useEffect(() => {
-    if (open) {
+    if (open && !authLoading && isAuthenticated) {
       void loadNotifications();
     }
-  }, [open]);
+  }, [authLoading, isAuthenticated, open]);
 
   const unreadItems = useMemo(() => items.filter((item) => !item.read), [items]);
 

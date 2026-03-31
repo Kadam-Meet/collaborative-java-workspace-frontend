@@ -52,7 +52,7 @@ type RemoteSelectionState = {
 };
 
 const Workspace = () => {
-  const { user } = useAuth();
+  const { user, loading: authLoading, isAuthenticated } = useAuth();
   const navigate = useNavigate();
   const { roomId } = useParams();
   const isStandalone = !roomId;
@@ -183,6 +183,10 @@ const Workspace = () => {
   };
 
   useEffect(() => {
+    if (authLoading || !isAuthenticated) {
+      return;
+    }
+
     if (!roomId) {
       const restored = resolveDraftContent({
         content: defaultJavaCode,
@@ -204,7 +208,7 @@ const Workspace = () => {
       return;
     }
     void loadRoomContext(roomId);
-  }, [roomId, resolveDraftContent]);
+  }, [authLoading, isAuthenticated, roomId, resolveDraftContent]);
 
   const handleAnalyze = async () => {
     const requestId = ++analysisRequestSeq.current;
@@ -234,6 +238,10 @@ const Workspace = () => {
   };
 
   useEffect(() => {
+    if (authLoading || !isAuthenticated) {
+      return;
+    }
+
     const requestId = ++analysisRequestSeq.current;
     const timeoutId = window.setTimeout(async () => {
       try {
@@ -253,7 +261,7 @@ const Workspace = () => {
     }, 1200);
 
     return () => window.clearTimeout(timeoutId);
-  }, [code, roomId, user.email]);
+  }, [authLoading, isAuthenticated, code, roomId, user.email]);
 
   const handleDownload = () => {
     const triggerDownload = (blob: Blob, fileName: string) => {

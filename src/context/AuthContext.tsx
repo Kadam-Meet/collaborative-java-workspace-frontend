@@ -1,8 +1,15 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { loginApi, meApi, signupApi, type AuthUser } from "@/api/authApi";
+import {
+	clearStoredSession,
+	getTokenStorageKey,
+	getUserStorageKey,
+	markAuthInitialized,
+	persistStoredSession,
+} from "@/lib/authSession";
 
-const TOKEN_KEY = "cjw-token";
-const USER_KEY = "cjw-user";
+const TOKEN_KEY = getTokenStorageKey();
+const USER_KEY = getUserStorageKey();
 
 interface AuthContextType {
 	user: AuthUser | null;
@@ -17,13 +24,11 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 function persistSession(token: string, user: AuthUser) {
-	localStorage.setItem(TOKEN_KEY, token);
-	localStorage.setItem(USER_KEY, JSON.stringify(user));
+	persistStoredSession(token, JSON.stringify(user));
 }
 
 function clearSession() {
-	localStorage.removeItem(TOKEN_KEY);
-	localStorage.removeItem(USER_KEY);
+	clearStoredSession();
 }
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
@@ -36,6 +41,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 		const storedUser = localStorage.getItem(USER_KEY);
 
 		if (!storedToken || !storedUser) {
+			markAuthInitialized();
 			setLoading(false);
 			return;
 		}
@@ -45,6 +51,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 			parsedUser = JSON.parse(storedUser) as AuthUser;
 		} catch {
 			clearSession();
+			markAuthInitialized();
 			setLoading(false);
 			return;
 		}
@@ -63,6 +70,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 				setToken(null);
 			})
 			.finally(() => {
+				markAuthInitialized();
 				setLoading(false);
 			});
 	}, []);
@@ -76,6 +84,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 		setToken(response.token);
 		setUser(resolvedUser);
 		persistSession(response.token, resolvedUser);
+		markAuthInitialized();
+		setLoading(false);
 	};
 
 	const signup = async (name: string, email: string, password: string) => {
@@ -87,12 +97,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 		setToken(response.token);
 		setUser(resolvedUser);
 		persistSession(response.token, resolvedUser);
+		markAuthInitialized();
+		setLoading(false);
 	};
 
 	const logout = () => {
 		clearSession();
 		setToken(null);
 		setUser(null);
+		markAuthInitialized();
+		setLoading(false);
 	};
 
 	const value = useMemo<AuthContextType>(

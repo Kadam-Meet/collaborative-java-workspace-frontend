@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { connectRoomStream, type RoomRealtimeEvent } from "@/services/socketService";
+import { useAuth } from "@/hooks/useAuth";
 
 interface ActiveUser {
 	id: number;
@@ -14,6 +15,7 @@ interface UseSocketOptions {
 }
 
 export function useSocket({ roomId, enabled, onEvent }: UseSocketOptions) {
+	const { loading: authLoading, isAuthenticated } = useAuth();
 	const [connected, setConnected] = useState(false);
 	const [activeUsers, setActiveUsers] = useState<ActiveUser[]>([]);
 	const onEventRef = useRef(onEvent);
@@ -23,7 +25,7 @@ export function useSocket({ roomId, enabled, onEvent }: UseSocketOptions) {
 	}, [onEvent]);
 
 	useEffect(() => {
-		if (!enabled || !roomId) {
+		if (authLoading || !isAuthenticated || !enabled || !roomId) {
 			setConnected(false);
 			setActiveUsers([]);
 			return;
@@ -46,7 +48,7 @@ export function useSocket({ roomId, enabled, onEvent }: UseSocketOptions) {
 			setConnected(false);
 			setActiveUsers([]);
 		};
-	}, [enabled, roomId]);
+	}, [authLoading, isAuthenticated, enabled, roomId]);
 
 	return { connected, activeUsers };
 }

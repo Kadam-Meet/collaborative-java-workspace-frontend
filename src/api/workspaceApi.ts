@@ -1,5 +1,5 @@
 import type { RoomActivity, RoomFile, RoomFileContent, RoomMember, RoomSummary, VersionEntry, VersionRevertResult } from "@/types/workspace.types";
-import { apiBlob, apiJson, authBearerHeader, authJsonHeaders } from "@/api/axiosClient";
+import { apiBlob, apiJson } from "@/api/axiosClient";
 
 interface WorkspaceRequestPayload {
   roomName?: string;
@@ -23,10 +23,6 @@ interface WorkspaceRequestPayload {
   typing?: boolean;
 }
 
-function authHeaders(): HeadersInit {
-  return authJsonHeaders();
-}
-
 async function workspaceRequest<T>(
   path: string,
   method: "GET" | "POST" | "PUT" | "DELETE",
@@ -34,9 +30,8 @@ async function workspaceRequest<T>(
 ): Promise<T> {
   return apiJson<T>(path, {
     method,
-    headers: authHeaders(),
     body: payload ? JSON.stringify(payload) : undefined,
-    auth: false,
+    auth: true,
   });
 }
 
@@ -155,15 +150,15 @@ export async function uploadRoomJavaFile(roomId: number, file: File): Promise<Ro
 
   return apiJson<RoomFileContent>(`/api/workspaces/rooms/${roomId}/files/upload`, {
     method: "POST",
-    headers: authBearerHeader(),
     body: formData,
+    auth: true,
   });
 }
 
 export async function downloadRoomFile(roomId: number, fileId: number): Promise<{ blob: Blob; fileName: string }> {
   const { blob, response } = await apiBlob(`/api/workspaces/rooms/${roomId}/files/${fileId}/download`, {
     method: "GET",
-    headers: authBearerHeader(),
+    auth: true,
   });
 
   const disposition = response.headers.get("content-disposition") || "";
