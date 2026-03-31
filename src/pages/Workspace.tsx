@@ -52,7 +52,7 @@ type RemoteSelectionState = {
 };
 
 const Workspace = () => {
-  const { user, loading: authLoading, isAuthenticated } = useAuth();
+  const { user, token, loading: authLoading, isAuthenticated } = useAuth();
   const navigate = useNavigate();
   const { roomId } = useParams();
   const isStandalone = !roomId;
@@ -183,7 +183,7 @@ const Workspace = () => {
   };
 
   useEffect(() => {
-    if (authLoading || !isAuthenticated) {
+    if (authLoading || !isAuthenticated || !token) {
       return;
     }
 
@@ -208,7 +208,7 @@ const Workspace = () => {
       return;
     }
     void loadRoomContext(roomId);
-  }, [authLoading, isAuthenticated, roomId, resolveDraftContent]);
+  }, [authLoading, isAuthenticated, token, roomId, resolveDraftContent]);
 
   const handleAnalyze = async () => {
     const requestId = ++analysisRequestSeq.current;
@@ -238,7 +238,7 @@ const Workspace = () => {
   };
 
   useEffect(() => {
-    if (authLoading || !isAuthenticated) {
+    if (authLoading || !isAuthenticated || !token) {
       return;
     }
 
@@ -261,7 +261,7 @@ const Workspace = () => {
     }, 1200);
 
     return () => window.clearTimeout(timeoutId);
-  }, [authLoading, isAuthenticated, code, roomId, user.email]);
+  }, [authLoading, isAuthenticated, token, code, roomId, user.email]);
 
   const handleDownload = () => {
     const triggerDownload = (blob: Blob, fileName: string) => {

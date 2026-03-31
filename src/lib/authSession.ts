@@ -3,6 +3,7 @@ const USER_KEY = "cjw-user";
 
 let authInitialized = false;
 let resolveAuthInitialization: (() => void) | null = null;
+let currentToken: string | null = null;
 
 const authInitializationPromise = new Promise<void>((resolve) => {
 	resolveAuthInitialization = resolve;
@@ -17,15 +18,29 @@ export function getUserStorageKey() {
 }
 
 export function readStoredToken(): string | null {
-	return localStorage.getItem(TOKEN_KEY);
+	if (currentToken) {
+		return currentToken;
+	}
+
+	const storedToken = localStorage.getItem(TOKEN_KEY);
+	if (storedToken) {
+		currentToken = storedToken;
+	}
+	return storedToken;
+}
+
+export function syncSessionToken(token: string | null) {
+	currentToken = token;
 }
 
 export function persistStoredSession(token: string, userJson: string) {
+	currentToken = token;
 	localStorage.setItem(TOKEN_KEY, token);
 	localStorage.setItem(USER_KEY, userJson);
 }
 
 export function clearStoredSession() {
+	currentToken = null;
 	localStorage.removeItem(TOKEN_KEY);
 	localStorage.removeItem(USER_KEY);
 }
@@ -46,4 +61,12 @@ export async function waitForAuthInitialization() {
 	}
 
 	await authInitializationPromise;
+}
+
+export async function waitForAuthToken() {
+	if (readStoredToken()) {
+		return;
+	}
+
+	await waitForAuthInitialization();
 }

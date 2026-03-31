@@ -15,7 +15,7 @@ interface UseSocketOptions {
 }
 
 export function useSocket({ roomId, enabled, onEvent }: UseSocketOptions) {
-	const { loading: authLoading, isAuthenticated } = useAuth();
+	const { token, loading: authLoading, isAuthenticated } = useAuth();
 	const [connected, setConnected] = useState(false);
 	const [activeUsers, setActiveUsers] = useState<ActiveUser[]>([]);
 	const onEventRef = useRef(onEvent);
@@ -25,7 +25,7 @@ export function useSocket({ roomId, enabled, onEvent }: UseSocketOptions) {
 	}, [onEvent]);
 
 	useEffect(() => {
-		if (authLoading || !isAuthenticated || !enabled || !roomId) {
+		if (authLoading || !isAuthenticated || !token || !enabled || !roomId) {
 			setConnected(false);
 			setActiveUsers([]);
 			return;
@@ -48,7 +48,7 @@ export function useSocket({ roomId, enabled, onEvent }: UseSocketOptions) {
 			setConnected(false);
 			setActiveUsers([]);
 		};
-	}, [authLoading, isAuthenticated, enabled, roomId]);
+	}, [authLoading, isAuthenticated, token, enabled, roomId]);
 
 	return { connected, activeUsers };
 }

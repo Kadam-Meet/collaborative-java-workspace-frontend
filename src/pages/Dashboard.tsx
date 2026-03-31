@@ -13,7 +13,7 @@ import type { DashboardSummary, RoomSummary } from "@/types/workspace.types";
 import { getUserFriendlyErrorMessage } from "@/hooks/useToast";
 
 const Dashboard = () => {
-  const { user, loading: authLoading, isAuthenticated } = useAuth();
+  const { user, token, loading: authLoading, isAuthenticated } = useAuth();
   const navigate = useNavigate();
   const [rooms, setRooms] = useState<RoomSummary[]>([]);
   const [dashboard, setDashboard] = useState<DashboardSummary | null>(null);
@@ -38,12 +38,12 @@ const Dashboard = () => {
   };
 
   useEffect(() => {
-    if (authLoading || !isAuthenticated) {
+    if (authLoading || !isAuthenticated || !token) {
       return;
     }
 
     void loadRooms();
-  }, [authLoading, isAuthenticated]);
+  }, [authLoading, isAuthenticated, token]);
 
   const handleCreateRoom = async () => {
     if (!newRoomName.trim()) {

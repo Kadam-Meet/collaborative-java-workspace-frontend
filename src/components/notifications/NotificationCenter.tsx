@@ -13,14 +13,14 @@ import { useAuth } from "@/hooks/useAuth";
 const REFRESH_MS = 15000;
 
 const NotificationCenter = () => {
-  const { loading: authLoading, isAuthenticated } = useAuth();
+  const { token, loading: authLoading, isAuthenticated } = useAuth();
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [unreadCount, setUnreadCount] = useState(0);
   const [items, setItems] = useState<NotificationItem[]>([]);
 
   const loadNotifications = async () => {
-    if (authLoading || !isAuthenticated) {
+    if (authLoading || !isAuthenticated || !token) {
       return;
     }
 
@@ -36,7 +36,7 @@ const NotificationCenter = () => {
   };
 
   useEffect(() => {
-    if (authLoading || !isAuthenticated) {
+    if (authLoading || !isAuthenticated || !token) {
       return;
     }
 
@@ -47,13 +47,13 @@ const NotificationCenter = () => {
     }, REFRESH_MS);
 
     return () => window.clearInterval(intervalId);
-  }, [authLoading, isAuthenticated]);
+  }, [authLoading, isAuthenticated, token]);
 
   useEffect(() => {
-    if (open && !authLoading && isAuthenticated) {
+    if (open && !authLoading && isAuthenticated && token) {
       void loadNotifications();
     }
-  }, [authLoading, isAuthenticated, open]);
+  }, [authLoading, isAuthenticated, open, token]);
 
   const unreadItems = useMemo(() => items.filter((item) => !item.read), [items]);
 

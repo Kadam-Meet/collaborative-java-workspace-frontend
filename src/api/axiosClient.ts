@@ -1,4 +1,4 @@
-import { getTokenStorageKey, waitForAuthInitialization } from "@/lib/authSession";
+import { getTokenStorageKey, waitForAuthToken } from "@/lib/authSession";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
@@ -88,7 +88,7 @@ return headers;
 
 export async function apiJson<T>(path: string, options?: RequestOptions): Promise<T> {
 if (options?.auth) {
-await waitForAuthInitialization();
+await waitForAuthToken();
 }
 
 const response = await fetch(`${API_BASE_URL}${path}`, {
@@ -113,7 +113,7 @@ path: string,
 options?: RequestOptions
 ): Promise<{ blob: Blob; response: Response }> {
 if (options?.auth) {
-await waitForAuthInitialization();
+await waitForAuthToken();
 }
 
 const response = await fetch(`${API_BASE_URL}${path}`, {

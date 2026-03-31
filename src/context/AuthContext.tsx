@@ -6,6 +6,7 @@ import {
 	getUserStorageKey,
 	markAuthInitialized,
 	persistStoredSession,
+	syncSessionToken,
 } from "@/lib/authSession";
 
 const TOKEN_KEY = getTokenStorageKey();
@@ -41,6 +42,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 		const storedUser = localStorage.getItem(USER_KEY);
 
 		if (!storedToken || !storedUser) {
+			syncSessionToken(null);
 			markAuthInitialized();
 			setLoading(false);
 			return;
@@ -51,11 +53,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 			parsedUser = JSON.parse(storedUser) as AuthUser;
 		} catch {
 			clearSession();
+			syncSessionToken(null);
 			markAuthInitialized();
 			setLoading(false);
 			return;
 		}
 
+		syncSessionToken(storedToken);
 		setToken(storedToken);
 		setUser(parsedUser);
 
@@ -66,6 +70,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 			})
 			.catch(() => {
 				clearSession();
+				syncSessionToken(null);
 				setUser(null);
 				setToken(null);
 			})
@@ -81,6 +86,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 		if (!response.token) {
 			throw new Error("Invalid auth response");
 		}
+		syncSessionToken(response.token);
 		setToken(response.token);
 		setUser(resolvedUser);
 		persistSession(response.token, resolvedUser);
@@ -94,6 +100,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 		if (!response.token) {
 			throw new Error("Invalid auth response");
 		}
+		syncSessionToken(response.token);
 		setToken(response.token);
 		setUser(resolvedUser);
 		persistSession(response.token, resolvedUser);
@@ -103,6 +110,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
 	const logout = () => {
 		clearSession();
+		syncSessionToken(null);
 		setToken(null);
 		setUser(null);
 		markAuthInitialized();

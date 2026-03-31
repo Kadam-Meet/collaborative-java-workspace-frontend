@@ -12,7 +12,7 @@ interface NavbarProps {
 
 const Navbar = ({ showAuth = true, children }: NavbarProps) => {
   const { theme, toggleTheme } = useTheme();
-  const { user, logout } = useAuth();
+  const { user, isAuthenticated, logout } = useAuth();
   const navigate = useNavigate();
 
   return (
@@ -29,7 +29,7 @@ const Navbar = ({ showAuth = true, children }: NavbarProps) => {
           {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
         </Button>
 
-        {showAuth && user && (
+        {showAuth && isAuthenticated && user && (
           <>
             <NotificationCenter />
             <div className="h-7 w-7 rounded-full bg-primary flex items-center justify-center text-primary-foreground text-xs font-semibold">
