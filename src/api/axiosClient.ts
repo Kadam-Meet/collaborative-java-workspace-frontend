@@ -69,21 +69,35 @@ type RequestOptions = RequestInit & {
 auth?: boolean;
 };
 
-function buildHeaders(inputHeaders?: HeadersInit, auth?: boolean, body?: BodyInit | null): Headers {
-const headers = new Headers(inputHeaders || {});
+function buildHeaders(
+  inputHeaders?: HeadersInit,
+  auth?: boolean,
+  method?: string,
+  body?: BodyInit | null
+): Headers {
+  const headers = new Headers(inputHeaders || {});
 
-const hasBody = body != null;
-const isFormData = typeof FormData !== "undefined" && body instanceof FormData;
+  const isFormData =
+    typeof FormData !== "undefined" && body instanceof FormData;
 
-if (hasBody && !isFormData && !headers.has("Content-Type")) {
-headers.set("Content-Type", "application/json");
-}
+  // 🔥 ONLY add Content-Type for methods that support body
+  const methodUpper = method?.toUpperCase();
 
-if (auth) {
-headers.set("Authorization", `Bearer ${readToken()}`);
-}
+  if (
+    body &&
+    !isFormData &&
+    methodUpper &&
+    ["POST", "PUT", "PATCH"].includes(methodUpper) &&
+    !headers.has("Content-Type")
+  ) {
+    headers.set("Content-Type", "application/json");
+  }
 
-return headers;
+  if (auth) {
+    headers.set("Authorization", `Bearer ${readToken()}`);
+  }
+
+  return headers;
 }
 
 export async function apiJson<T>(path: string, options?: RequestOptions): Promise<T> {
@@ -93,7 +107,7 @@ await waitForAuthToken();
 
 const response = await fetch(`${API_BASE_URL}${path}`, {
 ...options,
-headers: buildHeaders(options?.headers, options?.auth, options?.body),
+headers: buildHeaders(options?.headers, options?.auth, options?.method, options?.body),
 });
 
 if (!response.ok) {
@@ -118,7 +132,7 @@ await waitForAuthToken();
 
 const response = await fetch(`${API_BASE_URL}${path}`, {
 ...options,
-headers: buildHeaders(options?.headers, options?.auth, options?.body),
+headers: buildHeaders(options?.headers, options?.auth, options?.method, options?.body),
 });
 
 if (!response.ok) {
