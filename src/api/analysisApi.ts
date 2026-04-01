@@ -18,6 +18,9 @@ export interface WorkspaceIssue {
 	explanation: string;
 	suggestion: string;
 	impact: string;
+	ruleName?: string;
+	category?: string;
+	fixSuggestion?: string;
 }
 
 export interface WorkspaceAnalysis {
@@ -40,7 +43,10 @@ interface FullReviewApiResponse {
 			severity: "HIGH" | "MEDIUM" | "LOW";
 			explanation: string;
 			suggestedFix: string;
+			fixSuggestion?: string;
 			impact: string;
+			ruleName?: string;
+			category?: string;
 		}>;
 	};
 	analysis: {
@@ -131,8 +137,11 @@ function mapFullReview(payload: FullReviewApiResponse): WorkspaceReviewResult {
 			line: issue.line,
 			severity: issue.severity.toLowerCase() as IssueSeverity,
 			explanation: issue.explanation,
-			suggestion: issue.suggestedFix,
+			suggestion: issue.fixSuggestion || issue.suggestedFix,
 			impact: issue.impact,
+			ruleName: issue.ruleName,
+			category: issue.category,
+			fixSuggestion: issue.fixSuggestion || issue.suggestedFix,
 		})),
 	};
 }
