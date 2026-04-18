@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,6 +13,8 @@ const Login = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const inviteToken = (searchParams.get("inviteToken") ?? "").trim();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -25,7 +27,11 @@ const Login = () => {
     setIsSubmitting(true);
     try {
       await login(email, password);
-      navigate("/dashboard");
+      if (inviteToken) {
+        navigate(`/invite?token=${encodeURIComponent(inviteToken)}`);
+      } else {
+        navigate("/dashboard");
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : "Login failed. Please try again.";
       setError(message);
@@ -63,8 +69,14 @@ const Login = () => {
             </Button>
           </form>
           <div className="mt-4 text-center space-y-1">
-            <Link to="/signup" className="text-xs text-primary hover:underline">Create an account</Link>
-            <p><a href="#" className="text-xs text-muted-foreground hover:text-foreground">Forgot password?</a></p>
+            <Link to={inviteToken ? `/signup?inviteToken=${encodeURIComponent(inviteToken)}` : "/signup"} className="text-xs text-primary hover:underline">
+              Create an account
+            </Link>
+            <p>
+              <Link to="/forgot-password" className="text-xs text-muted-foreground hover:text-foreground">
+                Forgot password?
+              </Link>
+            </p>
           </div>
         </div>
       </div>

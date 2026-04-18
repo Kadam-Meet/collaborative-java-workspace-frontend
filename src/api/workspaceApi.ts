@@ -1,10 +1,21 @@
-import type { RoomActivity, RoomFile, RoomFileContent, RoomMember, RoomSummary, VersionEntry, VersionRevertResult } from "@/types/workspace.types";
+import type {
+  AcceptInvitationResponse,
+  InvitationPreviewResponse,
+  RoomActivity,
+  RoomFile,
+  RoomFileContent,
+  RoomMember,
+  RoomSummary,
+  VersionEntry,
+  VersionRevertResult,
+} from "@/types/workspace.types";
 import { apiBlob, apiJson } from "@/api/axiosClient";
 
 interface WorkspaceRequestPayload {
   roomName?: string;
   roomCode?: string;
   memberEmail?: string;
+  invitationToken?: string;
   filePath?: string;
   folderPath?: string;
   newFolderPath?: string;
@@ -63,8 +74,22 @@ export function getRoomMembers(roomId: number): Promise<RoomMember[]> {
   return workspaceRequest<RoomMember[]>(`/api/workspaces/rooms/${roomId}/members`, "GET");
 }
 
-export function addRoomMember(roomId: number, memberEmail: string): Promise<RoomSummary> {
-  return workspaceRequest<RoomSummary>(`/api/workspaces/rooms/${roomId}/members`, "POST", { memberEmail });
+export function addRoomMember(roomId: number, memberEmail: string): Promise<{ status: string; memberEmail: string; roomCode: string; roomName: string }> {
+  return workspaceRequest<{ status: string; memberEmail: string; roomCode: string; roomName: string }>(
+    `/api/workspaces/rooms/${roomId}/members`,
+    "POST",
+    { memberEmail }
+  );
+}
+
+export function previewInvitation(token: string): Promise<InvitationPreviewResponse> {
+  return apiJson<InvitationPreviewResponse>(`/api/workspaces/invitations/preview?token=${encodeURIComponent(token)}`, {
+    method: "GET",
+  });
+}
+
+export function acceptInvitation(invitationToken: string): Promise<AcceptInvitationResponse> {
+  return workspaceRequest<AcceptInvitationResponse>(`/api/workspaces/invitations/accept`, "POST", { invitationToken });
 }
 
 export function removeRoomMember(roomId: number, memberUserId: number): Promise<{ status: string; memberUserId: number }> {

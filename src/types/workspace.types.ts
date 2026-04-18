@@ -102,9 +102,30 @@ export interface NotificationItem {
   roomId?: number | null;
   roomCode?: string | null;
   roomName?: string | null;
+  actionType?: string | null;
+  actionToken?: string | null;
 }
 
 export interface NotificationListResponse {
   unreadCount: number;
   notifications: NotificationItem[];
+}
+
+export interface InvitationPreviewResponse {
+  valid: boolean;
+  expired: boolean;
+  accepted: boolean;
+  inviteeEmail: string;
+  roomCode: string;
+  roomName: string;
+  inviterName?: string | null;
+  requiresSignup: boolean;
+  expiresAt: string;
+}
+
+export interface AcceptInvitationResponse {
+  status: string;
+  roomCode: string;
+  roomName: string;
+  roomId: number;
 }

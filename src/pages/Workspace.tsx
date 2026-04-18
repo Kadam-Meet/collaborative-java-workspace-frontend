@@ -445,12 +445,12 @@ const Workspace = () => {
     }
 
     try {
-      await addRoomMember(room.id, memberEmail);
+      const result = await addRoomMember(room.id, memberEmail);
       const members = await getRoomMembers(room.id);
       setRoomMembers(members);
       const activity = await getRoomActivity(room.id);
       setRoomActivity(activity);
-      toast.success("Member added");
+      toast.success(result.status === "INVITED" ? "Invitation sent" : "Member added");
     } catch (error) {
       toast.error(getUserFriendlyErrorMessage(error, "Unable to add member"));
     }

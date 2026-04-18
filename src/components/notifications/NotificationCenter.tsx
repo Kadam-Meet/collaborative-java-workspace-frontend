@@ -5,15 +5,18 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { getNotifications, markAllNotificationsRead, markNotificationRead } from "@/api/notificationApi";
+import { acceptInvitation } from "@/api/workspaceApi";
 import type { NotificationItem } from "@/types/workspace.types";
 import { getUserFriendlyErrorMessage } from "@/hooks/useToast";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
+import { useNavigate } from "react-router-dom";
 
 const REFRESH_MS = 15000;
 
 const NotificationCenter = () => {
   const { token, loading: authLoading, isAuthenticated } = useAuth();
+  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -82,6 +85,23 @@ const NotificationCenter = () => {
     }
   };
 
+  const handleAcceptInvite = async (item: NotificationItem) => {
+    if (!item.actionToken) {
+      toast.error("Invitation token is missing");
+      return;
+    }
+
+    try {
+      const accepted = await acceptInvitation(item.actionToken);
+      await handleMarkRead(item);
+      toast.success(`Joined ${accepted.roomName}`);
+      setOpen(false);
+      navigate(`/workspace/${accepted.roomCode}`);
+    } catch (error) {
+      toast.error(getUserFriendlyErrorMessage(error, "Unable to accept invitation"));
+    }
+  };
+
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
@@ -113,22 +133,26 @@ const NotificationCenter = () => {
           ) : (
             <div className="divide-y divide-border">
               {items.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  className={`w-full text-left p-3 transition-colors hover:bg-muted/40 ${item.read ? "opacity-70" : ""}`}
-                  onClick={() => void handleMarkRead(item)}
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <p className="text-xs font-semibold text-foreground">{item.title}</p>
-                    {!item.read && <span className="h-2 w-2 rounded-full bg-primary mt-1" />}
+                <div key={item.id} className={`p-3 transition-colors hover:bg-muted/40 ${item.read ? "opacity-70" : ""}`}>
+                  <button type="button" className="w-full text-left" onClick={() => void handleMarkRead(item)}>
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="text-xs font-semibold text-foreground">{item.title}</p>
+                      {!item.read && <span className="h-2 w-2 rounded-full bg-primary mt-1" />}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">{item.message}</p>
+                    <p className="text-[10px] text-muted-foreground mt-1">
+                      {new Date(item.createdAt).toLocaleString()}
+                      {item.roomCode ? ` • ${item.roomCode}` : ""}
+                    </p>
+                  </button>
+                  {item.actionType === "INVITE_ACCEPT" && item.actionToken ? (
+                    <div className="mt-2 flex justify-end">
+                      <Button size="sm" className="h-7 px-2 text-xs" onClick={() => void handleAcceptInvite(item)}>
+                        Accept invitation
+                      </Button>
+                    </div>
+                  ) : null}
                   </div>
-                  <p className="text-xs text-muted-foreground mt-1">{item.message}</p>
-                  <p className="text-[10px] text-muted-foreground mt-1">
-                    {new Date(item.createdAt).toLocaleString()}
-                    {item.roomCode ? ` • ${item.roomCode}` : ""}
-                  </p>
-                </button>
               ))}
             </div>
           )}

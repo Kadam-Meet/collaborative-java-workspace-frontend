@@ -39,6 +39,19 @@ interface SignupPayload {
 	password: string;
 }
 
+interface ForgotPasswordPayload {
+	email: string;
+}
+
+interface ResetPasswordPayload {
+	token: string;
+	password: string;
+}
+
+export interface ApiMessageResponse {
+	message: string;
+}
+
 interface UpdateMePayload {
 	name?: string;
 	password?: string;
@@ -77,6 +90,22 @@ export async function loginApi(payload: LoginPayload): Promise<AuthResponse> {
 
 export async function signupApi(payload: SignupPayload): Promise<AuthResponse> {
 	return apiJson<AuthResponse>("/api/auth/signup", {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify(payload),
+	});
+}
+
+export async function forgotPasswordApi(payload: ForgotPasswordPayload): Promise<ApiMessageResponse> {
+	return apiJson<ApiMessageResponse>("/api/auth/forgot-password", {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify(payload),
+	});
+}
+
+export async function resetPasswordApi(payload: ResetPasswordPayload): Promise<ApiMessageResponse> {
+	return apiJson<ApiMessageResponse>("/api/auth/reset-password", {
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
 		body: JSON.stringify(payload),

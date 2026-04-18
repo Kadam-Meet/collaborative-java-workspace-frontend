@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { Navigate } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
+import { Link, Navigate } from "react-router-dom";
 import { Bell, MapPin, Palette, ShieldCheck, Sparkles, UserRound } from "lucide-react";
 import Navbar from "@/components/layout/Navbar";
 import { useAuth } from "@/hooks/useAuth";
@@ -12,17 +12,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { getUserFriendlyErrorMessage } from "@/hooks/useToast";
-
-const accentOptions = [
-  { value: "emerald", label: "Emerald", classes: "from-emerald-500 to-teal-400" },
-  { value: "ocean", label: "Ocean", classes: "from-sky-500 to-cyan-400" },
-  { value: "sunset", label: "Sunset", classes: "from-orange-500 to-amber-400" },
-  { value: "rose", label: "Rose", classes: "from-rose-500 to-pink-400" },
-];
+import { getProfileAccent, profileAccentOptions } from "@/lib/profileAccent";
 
 const Profile = () => {
   const { user, updateUser } = useAuth();
   const [saving, setSaving] = useState(false);
+  const locationInputRef = useRef<HTMLInputElement>(null);
   const [form, setForm] = useState({
     name: "",
     headline: "",
@@ -55,10 +50,7 @@ const Profile = () => {
     });
   }, [user]);
 
-  const accent = useMemo(
-    () => accentOptions.find((option) => option.value === form.accentColor) ?? accentOptions[0],
-    [form.accentColor]
-  );
+  const accent = getProfileAccent(form.accentColor);
 
   if (!user) {
     return <Navigate to="/login" replace />;
@@ -121,15 +113,29 @@ const Profile = () => {
                     {form.headline || "Shape how your workspace identity looks and feels for collaborators."}
                   </p>
                 </div>
+                <div>
+                  <Link to="/dashboard">
+                    <Button variant="outline" size="sm" className="gap-2 rounded-full">
+                      Back to dashboard
+                    </Button>
+                  </Link>
+                </div>
                 <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
                   <span className="inline-flex items-center gap-2 rounded-full bg-card px-3 py-1">
                     <UserRound className="h-4 w-4 text-primary" />
                     {user.email}
                   </span>
-                  <span className="inline-flex items-center gap-2 rounded-full bg-card px-3 py-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      locationInputRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+                      locationInputRef.current?.focus();
+                    }}
+                    className="inline-flex items-center gap-2 rounded-full bg-card px-3 py-1 text-left transition-colors hover:bg-card/80 hover:text-foreground"
+                  >
                     <MapPin className="h-4 w-4 text-primary" />
                     {form.location || "Add your location"}
-                  </span>
+                  </button>
                 </div>
               </div>
 
@@ -179,7 +185,12 @@ const Profile = () => {
                   </label>
                   <label className="space-y-2 text-sm">
                     <span className="text-muted-foreground">Location</span>
-                    <Input value={form.location} onChange={(event) => updateField("location", event.target.value)} placeholder="City, country" />
+                    <Input
+                      ref={locationInputRef}
+                      value={form.location}
+                      onChange={(event) => updateField("location", event.target.value)}
+                      placeholder="City, country"
+                    />
                   </label>
                 </div>
                 <label className="space-y-2 text-sm block">
@@ -212,7 +223,7 @@ const Profile = () => {
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
-                  {accentOptions.map((option) => (
+                  {profileAccentOptions.map((option) => (
                     <button
                       key={option.value}
                       type="button"

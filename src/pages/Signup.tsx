@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,6 +15,8 @@ const Signup = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { signup } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const inviteToken = (searchParams.get("inviteToken") ?? "").trim();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -25,7 +27,11 @@ const Signup = () => {
     setIsSubmitting(true);
     try {
       await signup(name, email, password);
-      navigate("/dashboard");
+      if (inviteToken) {
+        navigate(`/invite?token=${encodeURIComponent(inviteToken)}`);
+      } else {
+        navigate("/dashboard");
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : "Signup failed. Please try again.";
       setError(message);
@@ -67,7 +73,10 @@ const Signup = () => {
             </Button>
           </form>
           <p className="mt-4 text-center text-xs text-muted-foreground">
-            Already have an account? <Link to="/login" className="text-primary hover:underline">Sign in</Link>
+            Already have an account?{" "}
+            <Link to={inviteToken ? `/login?inviteToken=${encodeURIComponent(inviteToken)}` : "/login"} className="text-primary hover:underline">
+              Sign in
+            </Link>
           </p>
         </div>
       </div>
