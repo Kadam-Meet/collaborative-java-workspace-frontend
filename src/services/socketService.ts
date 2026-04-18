@@ -1,6 +1,7 @@
 import { readStoredToken } from "@/lib/authSession";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "";
+const DEFAULT_API_BASE_URL = "https://collaborative-java-workspace-backend.onrender.com";
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? DEFAULT_API_BASE_URL).trim().replace(/\/$/, "");
 
 export interface RoomRealtimeEvent {
 	type: string;

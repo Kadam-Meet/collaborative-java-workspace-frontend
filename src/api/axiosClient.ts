@@ -1,12 +1,9 @@
 import { getTokenStorageKey, waitForAuthToken } from "@/lib/authSession";
 
+const DEFAULT_API_BASE_URL = "https://collaborative-java-workspace-backend.onrender.com";
 const RAW_API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
-if (RAW_API_BASE_URL === undefined) {
-  throw new Error("VITE_API_BASE_URL is not defined. Please set it in your environment variables.");
-}
-
-const API_BASE_URL = RAW_API_BASE_URL.trim();
+const API_BASE_URL = (RAW_API_BASE_URL ?? DEFAULT_API_BASE_URL).trim().replace(/\/$/, "");
 
 const TOKEN_KEY = getTokenStorageKey();
 
