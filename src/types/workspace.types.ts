@@ -17,6 +17,7 @@ export interface RoomMember {
   canEditFiles: boolean;
   canSaveVersions: boolean;
   canRevertVersions: boolean;
+  memberRole?: "OWNER" | "ADMIN" | "EDITOR" | "REVIEWER" | "VIEWER";
 }
 
 export interface RoomFile {
@@ -40,6 +41,8 @@ export interface VersionEntry {
   fileId: number;
   contentPreview: string;
   message?: string;
+  filePath?: string | null;
+  content?: string;
 }
 
 export interface VersionRevertResult {
@@ -50,6 +53,24 @@ export interface VersionRevertResult {
   newVersion: number;
   updatedAt: string;
   updatedByEmail: string | null;
+}
+
+export interface VersionDeleteResult {
+  deleted: boolean;
+  fileId: number;
+  versionId: number;
+  versionNumber: number;
+}
+
+export interface VersionCompareResult {
+  fileId: number;
+  filePath: string;
+  fromVersionId: number;
+  toVersionId: number;
+  fromLabel: string;
+  toLabel: string;
+  fromContent: string;
+  toContent: string;
 }
 
 export interface DashboardTotals {
@@ -84,6 +105,46 @@ export interface RoomActivity {
   actorEmail?: string | null;
 }
 
+export interface ActivityFilters {
+  actorEmail?: string;
+  type?: string;
+  from?: string;
+  to?: string;
+}
+
+export interface FileLockEntry {
+  fileId: number;
+  lockedByEmail: string;
+  lockedByName: string;
+  lockedAt: string;
+}
+
+export interface CommentEntry {
+  id: number;
+  roomId: number;
+  fileId: number;
+  parentId?: number | null;
+  content: string;
+  startLine?: number | null;
+  startColumn?: number | null;
+  endLine?: number | null;
+  endColumn?: number | null;
+  resolved: boolean;
+  resolvedByEmail?: string | null;
+  resolvedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  authorEmail?: string | null;
+  authorName?: string | null;
+}
+
+export interface RoomSearchResults {
+  query: string;
+  files: RoomFile[];
+  versions: VersionEntry[];
+  activity: RoomActivity[];
+}
+
 export interface DashboardSummary {
   totals: DashboardTotals;
   performance: DashboardPerformance;
@@ -102,6 +163,7 @@ export interface NotificationItem {
   roomId?: number | null;
   roomCode?: string | null;
   roomName?: string | null;
+  recipientEmail?: string | null;
   actionType?: string | null;
   actionToken?: string | null;
 }
@@ -116,6 +178,7 @@ export interface InvitationPreviewResponse {
   expired: boolean;
   accepted: boolean;
   inviteeEmail: string;
+  inviterEmail?: string | null;
   roomCode: string;
   roomName: string;
   inviterName?: string | null;
@@ -128,4 +191,22 @@ export interface AcceptInvitationResponse {
   roomCode: string;
   roomName: string;
   roomId: number;
+  inviteeEmail?: string | null;
+  inviterEmail?: string | null;
+}
+
+export interface PendingInvitationSummary {
+  id: number;
+  status: string;
+  roomId: number | null;
+  roomCode: string | null;
+  roomName: string | null;
+  inviteeEmail: string;
+  inviterEmail: string | null;
+  acceptedByEmail: string | null;
+  createdAt: string;
+  expiresAt: string | null;
+  acceptedAt: string | null;
+  declinedAt: string | null;
+  revokedAt: string | null;
 }

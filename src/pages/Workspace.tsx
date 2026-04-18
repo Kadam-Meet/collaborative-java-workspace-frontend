@@ -18,24 +18,38 @@ import { getUserFriendlyErrorMessage } from "@/hooks/useToast";
 import { useAutoSave } from "@/hooks/useAutoSave";
 import { useSocket } from "@/hooks/useSocket";
 import {
+  acquireFileLock,
   addRoomMember,
+  addFileComment,
+  compareVersions,
   createRoomFile,
+  deleteFileVersion,
   downloadRoomFile,
+  getFileComments,
   getFileVersions,
+  getPendingInvitations,
+  getRoomActivityFiltered,
   getRoomByCode,
   getRoomActivity,
   getRoomFile,
   getRoomFiles,
+  getVersionDetail,
   getRoomMembers,
   joinRoom,
+  listFileLocks,
+  replyToComment,
   revertFileVersion,
+  resolveComment,
   publishRoomPresence,
+  releaseFileLock,
+  revokeInvitation,
   saveRoomFile,
   saveVersionSnapshot,
+  searchRoom,
   updateRoomMemberPermissions,
   uploadRoomJavaFile,
 } from "@/api/workspaceApi";
-import type { RoomActivity, RoomFile, RoomMember, RoomSummary, VersionEntry } from "@/types/workspace.types";
+import type { ActivityFilters, CommentEntry, FileLockEntry, PendingInvitationSummary, RoomActivity, RoomFile, RoomMember, RoomSearchResults, RoomSummary, VersionCompareResult, VersionEntry } from "@/types/workspace.types";
 import { useAuth } from "@/hooks/useAuth";
 import { buildDraftStorageKey, clearDraftSnapshot, isDraftNewerThanServer, loadDraftSnapshot, saveDraftSnapshot } from "@/utils/draftStorage";
 import type { RoomRealtimeEvent } from "@/services/socketService";
@@ -63,6 +77,7 @@ const Workspace = () => {
   const [backendAvailable, setBackendAvailable] = useState(true);
   const [room, setRoom] = useState<RoomSummary | null>(null);
   const [roomMembers, setRoomMembers] = useState<RoomMember[]>([]);
+  const [pendingInvitations, setPendingInvitations] = useState<PendingInvitationSummary[]>([]);
   const [roomFiles, setRoomFiles] = useState<RoomFile[]>([]);
   const [versions, setVersions] = useState<VersionEntry[]>([]);
   const [roomActivity, setRoomActivity] = useState<RoomActivity[]>([]);
@@ -84,6 +99,14 @@ const Workspace = () => {
     endColumn: 1,
   });
   const [remoteSelections, setRemoteSelections] = useState<Record<string, RemoteSelectionState>>({});
+  const [fileLocks, setFileLocks] = useState<Record<number, { lockedByEmail: string; lockedByName: string }>>({});
+  const [comments, setComments] = useState<CommentEntry[]>([]);
+  const [newComment, setNewComment] = useState("");
+  const [commentReplyDraft, setCommentReplyDraft] = useState<Record<number, string>>({});
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<RoomSearchResults | null>(null);
+  const [versionComparison, setVersionComparison] = useState<VersionCompareResult | null>(null);
+  const [activityFilters, setActivityFilters] = useState<ActivityFilters>({});
 
   useEffect(() => {
     codeRef.current = code;
@@ -139,13 +162,21 @@ const Workspace = () => {
     setLoadingRoom(true);
     try {
       const roomDetails = await getRoomByCode(codeValue);
-      const [members, files] = await Promise.all([
+      const [members, files, pending, locks] = await Promise.all([
         getRoomMembers(roomDetails.id),
         getRoomFiles(roomDetails.id),
+        getPendingInvitations(roomDetails.id),
+        listFileLocks(roomDetails.id),
       ]);
       setRoom(roomDetails);
       setRoomMembers(members);
+      setPendingInvitations(pending);
       setRoomFiles(files);
+      setFileLocks(
+        Object.fromEntries(
+          locks.map((lock: FileLockEntry) => [lock.fileId, { lockedByEmail: lock.lockedByEmail, lockedByName: lock.lockedByName }])
+        )
+      );
       const activity = await getRoomActivity(roomDetails.id);
       setRoomActivity(activity);
 
@@ -196,10 +227,14 @@ const Workspace = () => {
       setLoadingRoom(false);
       setRoom(null);
       setRoomMembers([]);
+      setPendingInvitations([]);
       setRoomFiles([]);
       setVersions([]);
       setRoomActivity([]);
       setRemoteSelections({});
+      setFileLocks({});
+      setComments([]);
+      setSearchResults(null);
       setActiveFileId(null);
       setActiveFileUpdatedAt(null);
       setActiveFileName("DataProcessor.java");
@@ -373,9 +408,15 @@ const Workspace = () => {
     }
 
     try {
+      if (activeFileId && activeFileId !== fileId) {
+        await releaseFileLock(room.id, activeFileId).catch(() => undefined);
+      }
       const file = await getRoomFile(room.id, fileId);
       setLoadingVersions(true);
-      const history = await getFileVersions(room.id, fileId);
+      const [history, fileComments] = await Promise.all([
+        getFileVersions(room.id, fileId),
+        getFileComments(room.id, fileId),
+      ]);
       const resolved = resolveDraftContent({
         content: file.content || "",
         fileName: file.filePath,
@@ -390,6 +431,24 @@ const Workspace = () => {
       setCode(resolved.content);
       lastSyncedCodeRef.current = file.content || "";
       setVersions(history);
+      setComments(fileComments);
+      await acquireFileLock(room.id, file.id).catch(() => undefined);
+      const refreshedLocks = await listFileLocks(room.id);
+      setFileLocks(
+        Object.fromEntries(
+          refreshedLocks.map((lock: FileLockEntry) => [lock.fileId, { lockedByEmail: lock.lockedByEmail, lockedByName: lock.lockedByName }])
+        )
+      );
+      publishRoomPresence(room.id, {
+        fileId: file.id,
+        startLine: lastSelectionRef.current.startLine,
+        startColumn: lastSelectionRef.current.startColumn,
+        endLine: lastSelectionRef.current.endLine,
+        endColumn: lastSelectionRef.current.endColumn,
+        typing: false,
+      }).catch(() => {
+        // Ignore transient realtime presence publish failures.
+      });
     } catch (error) {
       toast.error(getUserFriendlyErrorMessage(error, "Unable to open file"));
     } finally {
@@ -407,6 +466,8 @@ const Workspace = () => {
       const created = await createRoomFile(room.id, filePath, "");
       const files = await getRoomFiles(room.id);
       setRoomFiles(files);
+      const pending = await getPendingInvitations(room.id);
+      setPendingInvitations(pending);
       setActiveFileId(created.id);
       setActiveFileUpdatedAt(created.updatedAt);
       setActiveFileName(created.filePath);
@@ -421,6 +482,24 @@ const Workspace = () => {
       setCode(resolved.content);
       lastSyncedCodeRef.current = created.content || "";
       setVersions([]);
+      setComments([]);
+      await acquireFileLock(room.id, created.id).catch(() => undefined);
+      const refreshedLocks = await listFileLocks(room.id);
+      setFileLocks(
+        Object.fromEntries(
+          refreshedLocks.map((lock: FileLockEntry) => [lock.fileId, { lockedByEmail: lock.lockedByEmail, lockedByName: lock.lockedByName }])
+        )
+      );
+      publishRoomPresence(room.id, {
+        fileId: created.id,
+        startLine: 1,
+        startColumn: 1,
+        endLine: 1,
+        endColumn: 1,
+        typing: false,
+      }).catch(() => {
+        // Ignore transient realtime presence publish failures.
+      });
       const activity = await getRoomActivity(room.id);
       setRoomActivity(activity);
       toast.success(`Created ${created.filePath}`);
@@ -448,6 +527,8 @@ const Workspace = () => {
       const result = await addRoomMember(room.id, memberEmail);
       const members = await getRoomMembers(room.id);
       setRoomMembers(members);
+      const pending = await getPendingInvitations(room.id);
+      setPendingInvitations(pending);
       const activity = await getRoomActivity(room.id);
       setRoomActivity(activity);
       toast.success(result.status === "INVITED" ? "Invitation sent" : "Member added");
@@ -462,6 +543,7 @@ const Workspace = () => {
       canEditFiles?: boolean;
       canSaveVersions?: boolean;
       canRevertVersions?: boolean;
+      memberRole?: "ADMIN" | "EDITOR" | "REVIEWER" | "VIEWER";
     }
   ) => {
     if (!room) {
@@ -499,6 +581,161 @@ const Workspace = () => {
       toast.success(`Reverted to v${reverted.revertedFromVersion}`);
     } catch (error) {
       toast.error(getUserFriendlyErrorMessage(error, "Unable to revert version"));
+    }
+  };
+
+  const handleRevokeInvitation = async (inviteeEmail: string) => {
+    if (!room) {
+      return;
+    }
+
+    const confirmed = window.confirm(`Revoke the pending invitation for ${inviteeEmail}?`);
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      await revokeInvitation(room.id, inviteeEmail);
+      const pending = await getPendingInvitations(room.id);
+      setPendingInvitations(pending);
+      const activity = await getRoomActivity(room.id);
+      setRoomActivity(activity);
+      toast.success(`Revoked invitation for ${inviteeEmail}`);
+    } catch (error) {
+      toast.error(getUserFriendlyErrorMessage(error, "Unable to revoke invitation"));
+    }
+  };
+
+  const handleDeleteVersion = async (versionId: number) => {
+    if (!room || !activeFileId) {
+      return;
+    }
+
+    const confirmed = window.confirm("Delete this version snapshot permanently?");
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      await deleteFileVersion(room.id, activeFileId, versionId);
+      const history = await getFileVersions(room.id, activeFileId);
+      setVersions(history);
+      const activity = await getRoomActivity(room.id);
+      setRoomActivity(activity);
+      toast.success("Version deleted");
+    } catch (error) {
+      toast.error(getUserFriendlyErrorMessage(error, "Unable to delete version"));
+    }
+  };
+
+  const handleCompareVersion = async (versionId: number) => {
+    if (!room || !activeFileId) {
+      return;
+    }
+
+    try {
+      const currentVersion = await getVersionDetail(room.id, activeFileId, versionId);
+      const compareTarget = versions.find((entry) => entry.id !== versionId)?.id;
+      if (!compareTarget) {
+        toast.info("At least two versions are required for compare");
+        return;
+      }
+      const comparison = await compareVersions(room.id, activeFileId, compareTarget, versionId);
+      setVersionComparison(comparison);
+      if (!currentVersion.content) {
+        toast.info("Loaded comparison for selected versions");
+      }
+    } catch (error) {
+      toast.error(getUserFriendlyErrorMessage(error, "Unable to compare versions"));
+    }
+  };
+
+  const loadComments = useCallback(async () => {
+    if (!room || !activeFileId) {
+      setComments([]);
+      return;
+    }
+    try {
+      const commentItems = await getFileComments(room.id, activeFileId);
+      setComments(commentItems);
+    } catch {
+      // Keep UI usable even if comments fail transiently.
+    }
+  }, [room, activeFileId]);
+
+  useEffect(() => {
+    void loadComments();
+  }, [loadComments]);
+
+  const handleAddComment = async () => {
+    if (!room || !activeFileId || !newComment.trim()) {
+      return;
+    }
+    try {
+      await addFileComment(room.id, activeFileId, {
+        content: newComment.trim(),
+        startLine: lastSelectionRef.current.startLine,
+        startColumn: lastSelectionRef.current.startColumn,
+        endLine: lastSelectionRef.current.endLine,
+        endColumn: lastSelectionRef.current.endColumn,
+      });
+      setNewComment("");
+      await loadComments();
+      toast.success("Comment added");
+    } catch (error) {
+      toast.error(getUserFriendlyErrorMessage(error, "Unable to add comment"));
+    }
+  };
+
+  const handleReplyComment = async (commentId: number) => {
+    if (!room || !commentReplyDraft[commentId]?.trim()) {
+      return;
+    }
+    try {
+      await replyToComment(room.id, commentId, commentReplyDraft[commentId].trim());
+      setCommentReplyDraft((prev) => ({ ...prev, [commentId]: "" }));
+      await loadComments();
+      toast.success("Reply added");
+    } catch (error) {
+      toast.error(getUserFriendlyErrorMessage(error, "Unable to add reply"));
+    }
+  };
+
+  const handleResolveComment = async (commentId: number, resolved: boolean) => {
+    if (!room) {
+      return;
+    }
+    try {
+      await resolveComment(room.id, commentId, resolved);
+      await loadComments();
+      toast.success(resolved ? "Comment resolved" : "Comment reopened");
+    } catch (error) {
+      toast.error(getUserFriendlyErrorMessage(error, "Unable to update comment"));
+    }
+  };
+
+  const handleSearch = async () => {
+    if (!room || !searchQuery.trim()) {
+      setSearchResults(null);
+      return;
+    }
+    try {
+      const results = await searchRoom(room.id, searchQuery.trim());
+      setSearchResults(results);
+    } catch (error) {
+      toast.error(getUserFriendlyErrorMessage(error, "Search failed"));
+    }
+  };
+
+  const handleApplyActivityFilters = async () => {
+    if (!room) {
+      return;
+    }
+    try {
+      const filtered = await getRoomActivityFiltered(room.id, activityFilters);
+      setRoomActivity(filtered);
+    } catch (error) {
+      toast.error(getUserFriendlyErrorMessage(error, "Unable to filter activity"));
     }
   };
 
@@ -549,6 +786,35 @@ const Workspace = () => {
           updatedAt: Date.now(),
         },
       }));
+      return;
+    }
+
+    if (event.type === "FILE_LOCKED") {
+      const fileId = Number(event.payload?.fileId ?? -1);
+      const lockedByEmail = String(event.payload?.lockedByEmail ?? "");
+      const lockedByName = String(event.payload?.lockedByName ?? lockedByEmail);
+      if (fileId > 0 && lockedByEmail) {
+        setFileLocks((prev) => ({ ...prev, [fileId]: { lockedByEmail, lockedByName } }));
+      }
+      return;
+    }
+
+    if (event.type === "FILE_UNLOCKED") {
+      const fileId = Number(event.payload?.fileId ?? -1);
+      if (fileId > 0) {
+        setFileLocks((prev) => {
+          const next = { ...prev };
+          delete next[fileId];
+          return next;
+        });
+      }
+      return;
+    }
+
+    if (["COMMENT_CREATED", "COMMENT_REPLY_CREATED", "COMMENT_RESOLVED"].includes(event.type)) {
+      if (activeFileId) {
+        void getFileComments(room.id, activeFileId).then(setComments).catch(() => undefined);
+      }
       return;
     }
 
@@ -622,18 +888,18 @@ const Workspace = () => {
     return () => window.clearInterval(intervalId);
   }, []);
 
-  const publishSelection = useCallback((selection: {
+  const publishSelection = useCallback((fileId: number, selection: {
     startLine: number;
     startColumn: number;
     endLine: number;
     endColumn: number;
   }, typing: boolean) => {
-    if (!room || !activeFileId || isStandalone) {
+    if (!room || !fileId || isStandalone) {
       return;
     }
 
     void publishRoomPresence(room.id, {
-      fileId: activeFileId,
+      fileId,
       startLine: selection.startLine,
       startColumn: selection.startColumn,
       endLine: selection.endLine,
@@ -642,7 +908,7 @@ const Workspace = () => {
     }).catch(() => {
       // Ignore transient realtime presence publish failures.
     });
-  }, [room, activeFileId, isStandalone]);
+  }, [room, isStandalone]);
 
   const handleEditorSelectionChange = useCallback((selection: {
     startLine: number;
@@ -651,8 +917,10 @@ const Workspace = () => {
     endColumn: number;
   }) => {
     lastSelectionRef.current = selection;
-    publishSelection(selection, false);
-  }, [publishSelection]);
+    if (activeFileId) {
+      publishSelection(activeFileId, selection, false);
+    }
+  }, [activeFileId, publishSelection]);
 
   const handleEditorCodeChange = useCallback((value: string) => {
     setCode(value);
@@ -661,13 +929,13 @@ const Workspace = () => {
     }
 
     const payload = lastSelectionRef.current;
-    publishSelection(payload, true);
+    publishSelection(activeFileId, payload, true);
 
     if (typingResetTimerRef.current) {
       window.clearTimeout(typingResetTimerRef.current);
     }
     typingResetTimerRef.current = window.setTimeout(() => {
-      publishSelection(payload, false);
+      publishSelection(activeFileId, payload, false);
     }, 1200);
   }, [room, activeFileId, isStandalone, publishSelection]);
 
@@ -689,6 +957,20 @@ const Workspace = () => {
         colorIndex: palette[index % palette.length],
       }));
   }, [remoteSelections, activeFileId]);
+
+  const activeEditors = useMemo(() => {
+    return Object.entries(remoteSelections)
+      .map(([email, selection]) => {
+        const fileName = roomFiles.find((file) => file.id === selection.fileId)?.filePath || `File #${selection.fileId}`;
+        return {
+          email,
+          label: selection.userLabel,
+          fileName,
+          typing: selection.typing,
+        };
+      })
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [remoteSelections, roomFiles]);
 
   const draftStorageKey = useMemo(() => buildDraftStorageKey({
     userEmail: user.email,
@@ -816,7 +1098,11 @@ const Workspace = () => {
           roomCode={isStandalone ? "STANDALONE" : room?.roomCode || roomId || "workspace"}
           roomName={isStandalone ? "Personal Workspace" : room?.roomName || "Workspace"}
           roomMembers={roomMembers}
+          pendingInvitations={pendingInvitations}
           activeUsers={activeUsers}
+          activeEditors={activeEditors}
+          fileLocks={fileLocks}
+          currentUserEmail={user.email}
           roomFiles={roomFiles}
           versions={versions}
           loadingVersions={loadingVersions}
@@ -828,10 +1114,13 @@ const Workspace = () => {
           onSaveVersion={handleSaveVersion}
           onJoinRoom={handleJoinRoom}
           onAddMember={handleAddMember}
+          onRevokeInvitation={handleRevokeInvitation}
           onUpdateMemberPermissions={handleUpdateMemberPermissions}
           onSelectFile={handleSelectFile}
           onCreateFile={handleCreateFile}
           onRevertVersion={handleRevertVersion}
+          onDeleteVersion={handleDeleteVersion}
+          onCompareVersion={handleCompareVersion}
         />
         <EditorPanel
           code={code}
@@ -848,13 +1137,138 @@ const Workspace = () => {
               <TabsTrigger value="analysis" className="text-xs flex-1 data-[state=active]:bg-surface rounded-md h-6">Analysis</TabsTrigger>
               <TabsTrigger value="issues" className="text-xs flex-1 data-[state=active]:bg-surface rounded-md h-6">Issues</TabsTrigger>
               <TabsTrigger value="learning" className="text-xs flex-1 data-[state=active]:bg-surface rounded-md h-6">Learning</TabsTrigger>
+              <TabsTrigger value="comments" className="text-xs flex-1 data-[state=active]:bg-surface rounded-md h-6">Comments</TabsTrigger>
+              <TabsTrigger value="search" className="text-xs flex-1 data-[state=active]:bg-surface rounded-md h-6">Search</TabsTrigger>
               <TabsTrigger value="activity" className="text-xs flex-1 data-[state=active]:bg-surface rounded-md h-6">Activity</TabsTrigger>
             </TabsList>
             <ScrollArea className="flex-1">
               <TabsContent value="analysis" className="mt-0"><AnalysisPanel result={analysis} /></TabsContent>
               <TabsContent value="issues" className="mt-0"><IssuesPanel issues={issues} /></TabsContent>
               <TabsContent value="learning" className="mt-0"><LearningPanel /></TabsContent>
+              <TabsContent value="comments" className="mt-0 p-3 space-y-2">
+                <textarea
+                  className="w-full min-h-20 rounded border border-border bg-surface p-2 text-xs"
+                  placeholder="Add a comment on current selection"
+                  value={newComment}
+                  onChange={(e) => setNewComment(e.target.value)}
+                />
+                <Button size="sm" className="h-7 text-xs" onClick={handleAddComment} disabled={!activeFileId || !newComment.trim()}>
+                  Add comment
+                </Button>
+                {comments.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">No comments for this file.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {comments.map((comment) => (
+                      <div key={comment.id} className="rounded-md border border-border bg-surface p-2 space-y-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-xs font-semibold text-foreground">{comment.authorName || comment.authorEmail || "Unknown"}</p>
+                          <span className="text-[10px] text-muted-foreground">{comment.resolved ? "resolved" : "open"}</span>
+                        </div>
+                        <p className="text-[11px] text-muted-foreground">{comment.content}</p>
+                        <div className="flex gap-1">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-6 text-[10px]"
+                            onClick={() => void handleResolveComment(comment.id, !comment.resolved)}
+                          >
+                            {comment.resolved ? "Reopen" : "Resolve"}
+                          </Button>
+                        </div>
+                        <div className="flex gap-1">
+                          <input
+                            className="h-6 flex-1 rounded border border-border bg-background px-2 text-[10px]"
+                            value={commentReplyDraft[comment.id] || ""}
+                            onChange={(e) => setCommentReplyDraft((prev) => ({ ...prev, [comment.id]: e.target.value }))}
+                            placeholder="Reply"
+                          />
+                          <Button
+                            size="sm"
+                            className="h-6 text-[10px]"
+                            onClick={() => void handleReplyComment(comment.id)}
+                            disabled={!commentReplyDraft[comment.id]?.trim()}
+                          >
+                            Reply
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </TabsContent>
+              <TabsContent value="search" className="mt-0 p-3 space-y-2">
+                <div className="flex gap-1">
+                  <input
+                    className="h-7 flex-1 rounded border border-border bg-surface px-2 text-xs"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search files, versions, activity"
+                  />
+                  <Button size="sm" className="h-7 text-xs" onClick={handleSearch}>Find</Button>
+                </div>
+                {!searchResults ? (
+                  <p className="text-xs text-muted-foreground">Run a search to see grouped results.</p>
+                ) : (
+                  <div className="space-y-2 text-xs">
+                    <div>
+                      <p className="font-semibold text-foreground">Files ({searchResults.files.length})</p>
+                      {searchResults.files.map((file) => <p key={file.id} className="text-muted-foreground">{file.filePath}</p>)}
+                    </div>
+                    <div>
+                      <p className="font-semibold text-foreground">Versions ({searchResults.versions.length})</p>
+                      {searchResults.versions.map((v) => <p key={v.id} className="text-muted-foreground">v{v.versionNumber} • {v.filePath || v.fileId}</p>)}
+                    </div>
+                    <div>
+                      <p className="font-semibold text-foreground">Activity ({searchResults.activity.length})</p>
+                      {searchResults.activity.map((a) => <p key={a.id} className="text-muted-foreground">{a.title}</p>)}
+                    </div>
+                  </div>
+                )}
+              </TabsContent>
               <TabsContent value="activity" className="mt-0 p-3">
+                <div className="grid grid-cols-2 gap-1.5 mb-2">
+                  <input
+                    className="h-7 rounded border border-border bg-surface px-2 text-[11px]"
+                    placeholder="Actor email"
+                    value={activityFilters.actorEmail || ""}
+                    onChange={(e) => setActivityFilters((prev) => ({ ...prev, actorEmail: e.target.value }))}
+                  />
+                  <input
+                    className="h-7 rounded border border-border bg-surface px-2 text-[11px]"
+                    placeholder="Event type"
+                    value={activityFilters.type || ""}
+                    onChange={(e) => setActivityFilters((prev) => ({ ...prev, type: e.target.value }))}
+                  />
+                  <input
+                    className="h-7 rounded border border-border bg-surface px-2 text-[11px]"
+                    placeholder="From (ISO date-time)"
+                    value={activityFilters.from || ""}
+                    onChange={(e) => setActivityFilters((prev) => ({ ...prev, from: e.target.value }))}
+                  />
+                  <input
+                    className="h-7 rounded border border-border bg-surface px-2 text-[11px]"
+                    placeholder="To (ISO date-time)"
+                    value={activityFilters.to || ""}
+                    onChange={(e) => setActivityFilters((prev) => ({ ...prev, to: e.target.value }))}
+                  />
+                </div>
+                <div className="flex gap-1 mb-2">
+                  <Button size="sm" className="h-7 text-xs" onClick={handleApplyActivityFilters}>Apply filters</Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-xs"
+                    onClick={() => {
+                      setActivityFilters({});
+                      if (room) {
+                        void getRoomActivity(room.id).then(setRoomActivity).catch(() => undefined);
+                      }
+                    }}
+                  >
+                    Reset
+                  </Button>
+                </div>
                 {roomActivity.length === 0 ? (
                   <p className="text-xs text-muted-foreground">No activity yet.</p>
                 ) : (
@@ -873,6 +1287,16 @@ const Workspace = () => {
               </TabsContent>
             </ScrollArea>
           </Tabs>
+          {versionComparison && (
+            <div className="border-t border-border p-3 space-y-2">
+              <p className="text-xs font-semibold text-foreground">Version compare: {versionComparison.fromLabel} vs {versionComparison.toLabel}</p>
+              <div className="grid grid-cols-2 gap-2">
+                <textarea className="h-24 rounded border border-border bg-surface p-2 text-[10px]" readOnly value={versionComparison.fromContent} />
+                <textarea className="h-24 rounded border border-border bg-surface p-2 text-[10px]" readOnly value={versionComparison.toContent} />
+              </div>
+              <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setVersionComparison(null)}>Close compare</Button>
+            </div>
+          )}
         </div>
       </div>
     </div>

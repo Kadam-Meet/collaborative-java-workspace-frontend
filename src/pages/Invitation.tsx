@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Code2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { previewInvitation, acceptInvitation } from "@/api/workspaceApi";
+import { declineInvitation, previewInvitation, acceptInvitation } from "@/api/workspaceApi";
 import type { InvitationPreviewResponse } from "@/types/workspace.types";
 import { getUserFriendlyErrorMessage } from "@/hooks/useToast";
 import { useAuth } from "@/hooks/useAuth";
@@ -15,6 +15,7 @@ const Invitation = () => {
 
   const [loading, setLoading] = useState(true);
   const [accepting, setAccepting] = useState(false);
+  const [declining, setDeclining] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [preview, setPreview] = useState<InvitationPreviewResponse | null>(null);
@@ -67,6 +68,31 @@ const Invitation = () => {
     }
   };
 
+  const handleDecline = async () => {
+    if (!token) {
+      setError("Invitation token is missing.");
+      return;
+    }
+
+    if (!isAuthenticated) {
+      navigate(`/login?inviteToken=${encodeURIComponent(token)}`);
+      return;
+    }
+
+    setDeclining(true);
+    setError("");
+    setSuccess("");
+    try {
+      const declined = await declineInvitation(token);
+      setSuccess(`Declined invitation to ${declined.roomName || "workspace"}`);
+      setTimeout(() => navigate("/dashboard"), 900);
+    } catch (requestError) {
+      setError(getUserFriendlyErrorMessage(requestError, "Unable to decline invitation."));
+    } finally {
+      setDeclining(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background flex items-center justify-center px-4">
       <div className="w-full max-w-md animate-slide-up">
@@ -97,9 +123,19 @@ const Invitation = () => {
                   {preview.accepted ? "This invitation is already accepted." : "This invitation has expired."}
                 </p>
               ) : (
-                <Button onClick={() => void handleAccept()} disabled={accepting || authLoading} className="w-full">
-                  {accepting ? "Accepting..." : isAuthenticated ? "Accept invitation" : "Login to accept"}
-                </Button>
+                <div className="space-y-2">
+                  <Button onClick={() => void handleAccept()} disabled={accepting || authLoading} className="w-full">
+                    {accepting ? "Accepting..." : isAuthenticated ? "Accept invitation" : "Login to accept"}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => void handleDecline()}
+                    disabled={declining || authLoading}
+                    className="w-full"
+                  >
+                    {declining ? "Declining..." : isAuthenticated ? "Decline invitation" : "Login to decline"}
+                  </Button>
+                </div>
               )}
 
               {!isAuthenticated && preview.valid ? (

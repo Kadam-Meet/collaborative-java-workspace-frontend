@@ -34,12 +34,85 @@ export interface ButtonProps
   extends React.ButtonHTMLAttributes<HTMLButtonElement>,
     VariantProps<typeof buttonVariants> {
   asChild?: boolean;
+  preventRapidClick?: boolean;
+  clickLockMs?: number;
 }
 
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, size, asChild = false, ...props }, ref) => {
+  ({
+    className,
+    variant,
+    size,
+    asChild = false,
+    preventRapidClick = true,
+    clickLockMs = 1200,
+    disabled,
+    onClick,
+    ...props
+  }, ref) => {
     const Comp = asChild ? Slot : "button";
-    return <Comp className={cn(buttonVariants({ variant, size, className }))} ref={ref} {...props} />;
+    const [clickLocked, setClickLocked] = React.useState(false);
+    const lockTimeoutRef = React.useRef<number | null>(null);
+
+    React.useEffect(() => {
+      return () => {
+        if (lockTimeoutRef.current !== null) {
+          window.clearTimeout(lockTimeoutRef.current);
+        }
+      };
+    }, []);
+
+    const releaseLockLater = React.useCallback(() => {
+      if (lockTimeoutRef.current !== null) {
+        window.clearTimeout(lockTimeoutRef.current);
+      }
+      lockTimeoutRef.current = window.setTimeout(() => {
+        setClickLocked(false);
+      }, Math.max(250, clickLockMs));
+    }, [clickLockMs]);
+
+    const handleClick: React.MouseEventHandler<HTMLButtonElement> = (event) => {
+      if (disabled) {
+        return;
+      }
+
+      if (!preventRapidClick) {
+        onClick?.(event);
+        return;
+      }
+
+      if (clickLocked) {
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+
+      setClickLocked(true);
+
+      try {
+        const result = onClick?.(event);
+        if (result && typeof (result as PromiseLike<unknown>).then === "function") {
+          Promise.resolve(result).finally(releaseLockLater);
+          return;
+        }
+      } finally {
+        if (!onClick) {
+          releaseLockLater();
+        }
+      }
+
+      releaseLockLater();
+    };
+
+    return (
+      <Comp
+        className={cn(buttonVariants({ variant, size, className }))}
+        ref={ref}
+        disabled={disabled || (preventRapidClick && clickLocked)}
+        onClick={handleClick}
+        {...props}
+      />
+    );
   },
 );
 Button.displayName = "Button";

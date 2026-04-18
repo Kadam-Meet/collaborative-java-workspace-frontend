@@ -26,3 +26,17 @@ export function markAllNotificationsRead(): Promise<{ updated: number; unreadCou
     auth: true,
   });
 }
+
+export function deleteNotification(notificationId: number): Promise<{ deleted: boolean; notificationId: number; recipientEmail: string; unreadCount: number }> {
+  return apiJson<{ deleted: boolean; notificationId: number; recipientEmail: string; unreadCount: number }>(`/api/notifications/${notificationId}`, {
+    method: "DELETE",
+    auth: true,
+  });
+}
+
+export function clearNotifications(): Promise<{ deleted: number; recipientEmail: string; unreadCount: number }> {
+  return apiJson<{ deleted: number; recipientEmail: string; unreadCount: number }>("/api/notifications", {
+    method: "DELETE",
+    auth: true,
+  });
+}

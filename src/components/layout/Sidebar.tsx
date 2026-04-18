@@ -2,14 +2,23 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Save, Hash, Folder, FolderOpen, FileText, ChevronDown, ChevronRight, FolderPlus, FilePlus2 } from "lucide-react";
-import type { RoomFile, RoomMember, VersionEntry } from "@/types/workspace.types";
+import type { PendingInvitationSummary, RoomFile, RoomMember, VersionEntry } from "@/types/workspace.types";
 import VersionHistory from "@/components/workspace/VersionHistory";
 
 interface SidebarProps {
   roomCode: string;
   roomName: string;
   roomMembers: RoomMember[];
+  pendingInvitations: PendingInvitationSummary[];
   activeUsers: Array<{ email: string }>;
+  activeEditors: Array<{
+    email: string;
+    label: string;
+    fileName: string;
+    typing: boolean;
+  }>;
+  fileLocks: Record<number, { lockedByEmail: string; lockedByName: string }>;
+  currentUserEmail: string;
   roomFiles: RoomFile[];
   versions: VersionEntry[];
   loadingVersions?: boolean;
@@ -21,24 +30,32 @@ interface SidebarProps {
   onSaveVersion: () => Promise<void>;
   onJoinRoom: (roomCode: string) => Promise<void>;
   onAddMember: (email: string) => Promise<void>;
+  onRevokeInvitation: (inviteeEmail: string) => Promise<void>;
   onUpdateMemberPermissions: (
     memberUserId: number,
     permissions: {
       canEditFiles?: boolean;
       canSaveVersions?: boolean;
       canRevertVersions?: boolean;
+      memberRole?: "ADMIN" | "EDITOR" | "REVIEWER" | "VIEWER";
     }
   ) => Promise<void>;
   onSelectFile: (fileId: number) => Promise<void>;
   onCreateFile: (filePath: string) => Promise<void>;
   onRevertVersion: (versionId: number) => Promise<void>;
+  onDeleteVersion: (versionId: number) => Promise<void>;
+  onCompareVersion: (versionId: number) => Promise<void>;
 }
 
 const Sidebar = ({
   roomCode,
   roomName,
   roomMembers,
+  pendingInvitations,
   activeUsers,
+  activeEditors,
+  fileLocks,
+  currentUserEmail,
   roomFiles,
   versions,
   loadingVersions = false,
@@ -50,10 +67,13 @@ const Sidebar = ({
   onSaveVersion,
   onJoinRoom,
   onAddMember,
+  onRevokeInvitation,
   onUpdateMemberPermissions,
   onSelectFile,
   onCreateFile,
   onRevertVersion,
+  onDeleteVersion,
+  onCompareVersion,
 }: SidebarProps) => {
   const [joinRoom, setJoinRoom] = useState("");
   const [inviteEmail, setInviteEmail] = useState("");
@@ -270,6 +290,20 @@ const Sidebar = ({
                         />
                         Revert versions
                       </label>
+                      <select
+                        className="h-6 w-full rounded border border-border bg-background px-1 text-[10px]"
+                        value={member.memberRole || "EDITOR"}
+                        onChange={(e) =>
+                          void onUpdateMemberPermissions(member.id, {
+                            memberRole: e.target.value as "ADMIN" | "EDITOR" | "REVIEWER" | "VIEWER",
+                          })
+                        }
+                      >
+                        <option value="ADMIN">Admin</option>
+                        <option value="EDITOR">Editor</option>
+                        <option value="REVIEWER">Reviewer</option>
+                        <option value="VIEWER">Viewer</option>
+                      </select>
                       <div className="flex gap-1">
                         <Button
                           type="button"
@@ -305,6 +339,57 @@ const Sidebar = ({
               className="h-7 text-xs bg-surface border-border"
             />
             <Button size="sm" className="h-7 text-xs px-2 shrink-0" onClick={handleInvite}>Add</Button>
+          </div>
+        )}
+      </div>
+
+      {canManageMembers && (
+        <div className="p-3 border-b border-border">
+          <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Pending invites</h3>
+          {pendingInvitations.length === 0 ? (
+            <p className="text-[11px] text-muted-foreground">No pending invitations.</p>
+          ) : (
+            <div className="space-y-1.5 max-h-32 overflow-y-auto">
+              {pendingInvitations.map((invitation) => (
+                <div key={invitation.id} className="rounded border border-border bg-surface px-2 py-1.5 text-[11px] space-y-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="truncate text-foreground">{invitation.inviteeEmail}</span>
+                    <span className="text-[10px] text-muted-foreground">{invitation.status}</span>
+                  </div>
+                  <p className="text-muted-foreground truncate">
+                    {invitation.roomCode || roomCode} • {invitation.expiresAt ? new Date(invitation.expiresAt).toLocaleDateString() : "no expiry"}
+                  </p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-6 px-2 text-[10px]"
+                    onClick={() => void onRevokeInvitation(invitation.inviteeEmail)}
+                  >
+                    Revoke
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className="p-3 border-b border-border">
+        <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Live editors</h3>
+        {activeEditors.length === 0 ? (
+          <p className="text-[11px] text-muted-foreground">No collaborator is actively editing a file right now.</p>
+        ) : (
+          <div className="space-y-1.5 max-h-32 overflow-y-auto">
+            {activeEditors.map((editor) => (
+              <div key={editor.email} className="rounded border border-border bg-surface px-2 py-1.5 text-[11px] space-y-0.5">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="truncate text-foreground">{editor.label}</span>
+                  <span className="text-[10px] text-muted-foreground">{editor.typing ? "typing" : "editing"}</span>
+                </div>
+                <p className="text-muted-foreground truncate">{editor.fileName}</p>
+              </div>
+            ))}
           </div>
         )}
       </div>
@@ -372,6 +457,8 @@ const Sidebar = ({
 
                 {isExpanded && folderFiles.map((file) => {
                   const fileName = file.filePath.includes("/") ? file.filePath.slice(file.filePath.lastIndexOf("/") + 1) : file.filePath;
+                  const lock = fileLocks[file.id];
+                  const lockedByOther = Boolean(lock && lock.lockedByEmail.toLowerCase() !== currentUserEmail.toLowerCase());
                   return (
                     <button
                       key={file.id}
@@ -384,6 +471,11 @@ const Sidebar = ({
                     >
                       <FileText className="h-3 w-3" />
                       <span className="truncate">{fileName}</span>
+                      {lock ? (
+                        <span className={`ml-auto text-[9px] px-1 rounded ${lockedByOther ? "bg-destructive/15 text-destructive" : "bg-primary/15 text-primary"}`}>
+                          {lockedByOther ? `locked:${lock.lockedByName}` : "locked"}
+                        </span>
+                      ) : null}
                     </button>
                   );
                 })}
@@ -411,6 +503,9 @@ const Sidebar = ({
           loading={loadingVersions}
           onRevert={onRevertVersion}
           canRevert={canRevertVersions}
+          canDelete={canSaveVersions}
+          onDelete={onDeleteVersion}
+          onCompare={onCompareVersion}
         />
       </div>
     </aside>

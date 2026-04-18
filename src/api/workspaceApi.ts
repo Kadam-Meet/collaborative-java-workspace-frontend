@@ -1,11 +1,18 @@
 import type {
   AcceptInvitationResponse,
+  ActivityFilters,
+  CommentEntry,
+  FileLockEntry,
   InvitationPreviewResponse,
+  PendingInvitationSummary,
   RoomActivity,
   RoomFile,
   RoomFileContent,
   RoomMember,
+  RoomSearchResults,
   RoomSummary,
+  VersionCompareResult,
+  VersionDeleteResult,
   VersionEntry,
   VersionRevertResult,
 } from "@/types/workspace.types";
@@ -26,12 +33,14 @@ interface WorkspaceRequestPayload {
   canEditFiles?: boolean;
   canSaveVersions?: boolean;
   canRevertVersions?: boolean;
+  memberRole?: string;
   fileId?: number;
   startLine?: number;
   startColumn?: number;
   endLine?: number;
   endColumn?: number;
   typing?: boolean;
+  resolved?: boolean;
 }
 
 async function workspaceRequest<T>(
@@ -74,6 +83,10 @@ export function getRoomMembers(roomId: number): Promise<RoomMember[]> {
   return workspaceRequest<RoomMember[]>(`/api/workspaces/rooms/${roomId}/members`, "GET");
 }
 
+export function getPendingInvitations(roomId: number): Promise<PendingInvitationSummary[]> {
+  return workspaceRequest<PendingInvitationSummary[]>(`/api/workspaces/rooms/${roomId}/invitations`, "GET");
+}
+
 export function addRoomMember(roomId: number, memberEmail: string): Promise<{ status: string; memberEmail: string; roomCode: string; roomName: string }> {
   return workspaceRequest<{ status: string; memberEmail: string; roomCode: string; roomName: string }>(
     `/api/workspaces/rooms/${roomId}/members`,
@@ -92,6 +105,17 @@ export function acceptInvitation(invitationToken: string): Promise<AcceptInvitat
   return workspaceRequest<AcceptInvitationResponse>(`/api/workspaces/invitations/accept`, "POST", { invitationToken });
 }
 
+export function declineInvitation(invitationToken: string): Promise<PendingInvitationSummary> {
+  return workspaceRequest<PendingInvitationSummary>(`/api/workspaces/invitations/decline`, "POST", { invitationToken });
+}
+
+export function revokeInvitation(roomId: number, inviteeEmail: string): Promise<PendingInvitationSummary> {
+  return workspaceRequest<PendingInvitationSummary>(
+    `/api/workspaces/rooms/${roomId}/invitations/${encodeURIComponent(inviteeEmail)}`,
+    "DELETE"
+  );
+}
+
 export function removeRoomMember(roomId: number, memberUserId: number): Promise<{ status: string; memberUserId: number }> {
   return workspaceRequest<{ status: string; memberUserId: number }>(
     `/api/workspaces/rooms/${roomId}/members/${memberUserId}`,
@@ -106,6 +130,7 @@ export function updateRoomMemberPermissions(
     canEditFiles?: boolean;
     canSaveVersions?: boolean;
     canRevertVersions?: boolean;
+    memberRole?: "ADMIN" | "EDITOR" | "REVIEWER" | "VIEWER";
   }
 ): Promise<RoomMember> {
   return workspaceRequest<RoomMember>(
@@ -121,6 +146,20 @@ export function getRoomFiles(roomId: number): Promise<RoomFile[]> {
 
 export function getRoomActivity(roomId: number): Promise<RoomActivity[]> {
   return workspaceRequest<RoomActivity[]>(`/api/workspaces/rooms/${roomId}/activity`, "GET");
+}
+
+export function getRoomActivityFiltered(roomId: number, filters: ActivityFilters): Promise<RoomActivity[]> {
+  const params = new URLSearchParams();
+  if (filters.actorEmail) params.set("actorEmail", filters.actorEmail);
+  if (filters.type) params.set("type", filters.type);
+  if (filters.from) params.set("from", filters.from);
+  if (filters.to) params.set("to", filters.to);
+  const suffix = params.toString();
+  return workspaceRequest<RoomActivity[]>(`/api/workspaces/rooms/${roomId}/activity${suffix ? `?${suffix}` : ""}`, "GET");
+}
+
+export function searchRoom(roomId: number, query: string): Promise<RoomSearchResults> {
+  return workspaceRequest<RoomSearchResults>(`/api/workspaces/rooms/${roomId}/search?q=${encodeURIComponent(query)}`, "GET");
 }
 
 export function getRoomFile(roomId: number, fileId: number): Promise<RoomFileContent> {
@@ -214,6 +253,56 @@ export function revertFileVersion(roomId: number, fileId: number, versionId: num
     `/api/workspaces/rooms/${roomId}/files/${fileId}/versions/${versionId}/revert`,
     "POST"
   );
+}
+
+export function deleteFileVersion(roomId: number, fileId: number, versionId: number): Promise<VersionDeleteResult> {
+  return workspaceRequest<VersionDeleteResult>(
+    `/api/workspaces/rooms/${roomId}/files/${fileId}/versions/${versionId}`,
+    "DELETE"
+  );
+}
+
+export function getVersionDetail(roomId: number, fileId: number, versionId: number): Promise<VersionEntry> {
+  return workspaceRequest<VersionEntry>(`/api/workspaces/rooms/${roomId}/files/${fileId}/versions/${versionId}`, "GET");
+}
+
+export function compareVersions(roomId: number, fileId: number, fromVersionId: number, toVersionId: number): Promise<VersionCompareResult> {
+  return workspaceRequest<VersionCompareResult>(
+    `/api/workspaces/rooms/${roomId}/files/${fileId}/versions/compare?fromVersionId=${fromVersionId}&toVersionId=${toVersionId}`,
+    "GET"
+  );
+}
+
+export function listFileLocks(roomId: number): Promise<FileLockEntry[]> {
+  return workspaceRequest<FileLockEntry[]>(`/api/workspaces/rooms/${roomId}/locks`, "GET");
+}
+
+export function acquireFileLock(roomId: number, fileId: number): Promise<FileLockEntry> {
+  return workspaceRequest<FileLockEntry>(`/api/workspaces/rooms/${roomId}/files/${fileId}/lock`, "POST");
+}
+
+export function releaseFileLock(roomId: number, fileId: number): Promise<{ fileId: number; released: boolean }> {
+  return workspaceRequest<{ fileId: number; released: boolean }>(`/api/workspaces/rooms/${roomId}/files/${fileId}/lock`, "DELETE");
+}
+
+export function getFileComments(roomId: number, fileId: number): Promise<CommentEntry[]> {
+  return workspaceRequest<CommentEntry[]>(`/api/workspaces/rooms/${roomId}/files/${fileId}/comments`, "GET");
+}
+
+export function addFileComment(
+  roomId: number,
+  fileId: number,
+  payload: { content: string; startLine?: number; startColumn?: number; endLine?: number; endColumn?: number }
+): Promise<CommentEntry> {
+  return workspaceRequest<CommentEntry>(`/api/workspaces/rooms/${roomId}/files/${fileId}/comments`, "POST", payload);
+}
+
+export function replyToComment(roomId: number, commentId: number, content: string): Promise<CommentEntry> {
+  return workspaceRequest<CommentEntry>(`/api/workspaces/rooms/${roomId}/comments/${commentId}/reply`, "POST", { content });
+}
+
+export function resolveComment(roomId: number, commentId: number, resolved = true): Promise<CommentEntry> {
+  return workspaceRequest<CommentEntry>(`/api/workspaces/rooms/${roomId}/comments/${commentId}/resolve`, "PUT", { resolved });
 }
 
 export function publishRoomPresence(
