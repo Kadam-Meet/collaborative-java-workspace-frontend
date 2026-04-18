@@ -42,6 +42,10 @@ Behavior:
 - Leave it empty (`VITE_API_BASE_URL=`) to use same-origin `/api` with Vite dev proxy.
 - Set it (example: `http://127.0.0.1:8081`) to call backend directly.
 
+Vercel deployment example:
+
+- `VITE_API_BASE_URL=https://collaborative-java-workspace-backend.onrender.com`
+
 ## Run Locally
 
 Install dependencies:

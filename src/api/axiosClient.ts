@@ -1,10 +1,12 @@
 import { getTokenStorageKey, waitForAuthToken } from "@/lib/authSession";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+const RAW_API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
-if (!API_BASE_URL) {
-throw new Error("VITE_API_BASE_URL is not defined. Please set it in your environment variables.");
+if (RAW_API_BASE_URL === undefined) {
+  throw new Error("VITE_API_BASE_URL is not defined. Please set it in your environment variables.");
 }
+
+const API_BASE_URL = RAW_API_BASE_URL.trim();
 
 const TOKEN_KEY = getTokenStorageKey();
 
