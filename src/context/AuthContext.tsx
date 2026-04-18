@@ -19,6 +19,7 @@ interface AuthContextType {
 	isAuthenticated: boolean;
 	login: (email: string, password: string) => Promise<void>;
 	signup: (name: string, email: string, password: string) => Promise<void>;
+	updateUser: (user: AuthUser) => void;
 	logout: () => void;
 }
 
@@ -82,7 +83,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
 	const login = async (email: string, password: string) => {
 		const response = await loginApi({ email, password });
-		const resolvedUser = { name: response.name, email: response.email };
+		const resolvedUser = response;
 		if (!response.token) {
 			throw new Error("Invalid auth response");
 		}
@@ -96,7 +97,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
 	const signup = async (name: string, email: string, password: string) => {
 		const response = await signupApi({ name, email, password });
-		const resolvedUser = { name: response.name, email: response.email };
+		const resolvedUser = response;
 		if (!response.token) {
 			throw new Error("Invalid auth response");
 		}
@@ -106,6 +107,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 		persistSession(response.token, resolvedUser);
 		markAuthInitialized();
 		setLoading(false);
+	};
+
+	const updateUser = (nextUser: AuthUser) => {
+		setUser(nextUser);
+		if (token) {
+			persistSession(token, nextUser);
+		}
 	};
 
 	const logout = () => {
@@ -125,6 +133,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 			isAuthenticated: Boolean(user && token),
 			login,
 			signup,
+			updateUser,
 			logout,
 		}),
 		[user, token, loading]

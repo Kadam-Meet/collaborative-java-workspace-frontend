@@ -1,7 +1,7 @@
 import { Link, useNavigate } from "react-router-dom";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/hooks/useAuth";
-import { Sun, Moon, LogOut, Code2 } from "lucide-react";
+import { Sun, Moon, LogOut, Code2, UserCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import NotificationCenter from "@/components/notifications/NotificationCenter";
 
@@ -32,9 +32,19 @@ const Navbar = ({ showAuth = true, children }: NavbarProps) => {
         {showAuth && isAuthenticated && user && (
           <>
             <NotificationCenter />
-            <div className="h-7 w-7 rounded-full bg-primary flex items-center justify-center text-primary-foreground text-xs font-semibold">
-              {user.name.charAt(0).toUpperCase()}
-            </div>
+            <Link
+              to="/profile"
+              className="flex items-center gap-2 rounded-full border border-border bg-surface px-2 py-1 transition-colors hover:border-primary/40 hover:bg-primary/5"
+            >
+              <div className="h-7 w-7 rounded-full bg-primary flex items-center justify-center text-primary-foreground text-xs font-semibold">
+                {user.name.charAt(0).toUpperCase()}
+              </div>
+              <div className="hidden md:block text-left">
+                <p className="text-xs font-semibold text-foreground leading-none">{user.name}</p>
+                <p className="text-[11px] text-muted-foreground leading-none mt-1">View profile</p>
+              </div>
+              <UserCircle2 className="hidden md:block h-4 w-4 text-muted-foreground" />
+            </Link>
             <Button
               variant="ghost"
               size="icon"

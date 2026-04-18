@@ -99,6 +99,11 @@ const Dashboard = () => {
                 Solo Workspace
               </Button>
             </Link>
+            <Link to="/profile">
+              <Button variant="outline" size="sm" className="gap-1.5">
+                Profile
+              </Button>
+            </Link>
             <Button size="sm" className="gap-1.5" onClick={handleCreateRoom} disabled={saving || !newRoomName.trim()}>
               <Plus className="h-3.5 w-3.5" /> New Workspace
             </Button>

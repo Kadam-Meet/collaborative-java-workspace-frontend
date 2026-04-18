@@ -3,6 +3,14 @@ import { apiJson } from "@/api/axiosClient";
 export interface AuthUser {
 	name: string;
 	email: string;
+	headline: string | null;
+	bio: string | null;
+	location: string | null;
+	accentColor: string;
+	profilePublic: boolean;
+	emailNotifications: boolean;
+	workspaceDigest: boolean;
+	focusModeEnabled: boolean;
 }
 
 export interface AuthResponse {
@@ -10,6 +18,14 @@ export interface AuthResponse {
 	tokenType: string;
 	name: string;
 	email: string;
+	headline: string | null;
+	bio: string | null;
+	location: string | null;
+	accentColor: string;
+	profilePublic: boolean;
+	emailNotifications: boolean;
+	workspaceDigest: boolean;
+	focusModeEnabled: boolean;
 }
 
 interface LoginPayload {
@@ -26,6 +42,29 @@ interface SignupPayload {
 interface UpdateMePayload {
 	name?: string;
 	password?: string;
+	headline?: string;
+	bio?: string;
+	location?: string;
+	accentColor?: string;
+	profilePublic?: boolean;
+	emailNotifications?: boolean;
+	workspaceDigest?: boolean;
+	focusModeEnabled?: boolean;
+}
+
+function toAuthUser(data: AuthResponse): AuthUser {
+	return {
+		name: data.name,
+		email: data.email,
+		headline: data.headline ?? null,
+		bio: data.bio ?? null,
+		location: data.location ?? null,
+		accentColor: data.accentColor || "emerald",
+		profilePublic: Boolean(data.profilePublic),
+		emailNotifications: Boolean(data.emailNotifications),
+		workspaceDigest: Boolean(data.workspaceDigest),
+		focusModeEnabled: Boolean(data.focusModeEnabled),
+	};
 }
 
 export async function loginApi(payload: LoginPayload): Promise<AuthResponse> {
@@ -51,7 +90,7 @@ export async function meApi(token: string): Promise<AuthUser> {
 			Authorization: `Bearer ${token}`,
 		},
 	});
-	return { name: data.name, email: data.email };
+	return toAuthUser(data);
 }
 
 export async function updateMeApi(payload: UpdateMePayload): Promise<AuthUser> {
@@ -60,7 +99,7 @@ export async function updateMeApi(payload: UpdateMePayload): Promise<AuthUser> {
 		body: JSON.stringify(payload),
 		auth: true,
 	});
-	return { name: data.name, email: data.email };
+	return toAuthUser(data);
 }
 
 export async function deleteMeApi(): Promise<void> {
