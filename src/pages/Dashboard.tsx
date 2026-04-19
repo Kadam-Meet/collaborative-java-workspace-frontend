@@ -5,12 +5,13 @@ import Navbar from "@/components/layout/Navbar";
 import DashboardMetrics from "@/components/dashboard/DashboardMetrics";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Activity, ExternalLink, Plus, Users } from "lucide-react";
+import { Activity, ExternalLink, Plus, Trash2, Users } from "lucide-react";
 import { toast } from "sonner";
 import { createRoom, getMyRooms, joinRoom } from "@/api/workspaceApi";
 import { getDashboardSummary } from "@/api/dashboardApi";
 import type { DashboardSummary, RoomSummary } from "@/types/workspace.types";
 import { getUserFriendlyErrorMessage } from "@/hooks/useToast";
+import { clearDraftSnapshot } from "@/utils/draftStorage";
 
 type SoloWorkspaceEntry = {
   key: string;
@@ -98,6 +99,17 @@ const Dashboard = () => {
   const scrollToSection = (section: "rooms" | "files") => {
     const target = section === "rooms" ? roomsSectionRef.current : filesSectionRef.current;
     target?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
+  const handleDeleteSoloWorkspace = (entry: SoloWorkspaceEntry) => {
+    const confirmed = window.confirm(`Delete solo workspace ${entry.fileName}?`);
+    if (!confirmed) {
+      return;
+    }
+
+    clearDraftSnapshot(entry.key);
+    setSoloWorkspaces((prev) => prev.filter((item) => item.key !== entry.key));
+    toast.success(`Deleted ${entry.fileName}`);
   };
 
   const handleCreateRoom = async () => {
@@ -273,7 +285,12 @@ const Dashboard = () => {
                       <p className="text-sm font-semibold text-foreground truncate">{entry.fileName}</p>
                       <p className="text-xs text-muted-foreground truncate mt-1">{entry.preview}</p>
                     </div>
-                    <p className="text-[11px] text-muted-foreground shrink-0">{new Date(entry.savedAt).toLocaleString()}</p>
+                    <div className="shrink-0 flex items-center gap-2">
+                      <p className="text-[11px] text-muted-foreground">{new Date(entry.savedAt).toLocaleString()}</p>
+                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleDeleteSoloWorkspace(entry)}>
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
                   </div>
                 </div>
               ))

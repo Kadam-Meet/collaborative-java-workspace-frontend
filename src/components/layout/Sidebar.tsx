@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Save, Hash, Folder, FolderOpen, FileText, ChevronDown, ChevronRight, FolderPlus, FilePlus2 } from "lucide-react";
+import { Save, Hash, Folder, FolderOpen, FileText, ChevronDown, ChevronRight, FolderPlus, FilePlus2, Trash2 } from "lucide-react";
 import type { PendingInvitationSummary, RoomFile, RoomMember, VersionEntry } from "@/types/workspace.types";
 import VersionHistory from "@/components/workspace/VersionHistory";
 
@@ -27,6 +27,7 @@ interface SidebarProps {
   canManageMembers: boolean;
   canSaveVersions: boolean;
   canRevertVersions: boolean;
+  onDeleteRoom: () => Promise<void>;
   onSaveVersion: () => Promise<void>;
   onJoinRoom: (roomCode: string) => Promise<void>;
   onAddMember: (email: string) => Promise<void>;
@@ -42,6 +43,8 @@ interface SidebarProps {
   ) => Promise<void>;
   onSelectFile: (fileId: number) => Promise<void>;
   onCreateFile: (filePath: string) => Promise<void>;
+  onDeleteFile: (fileId: number) => Promise<void>;
+  onDeleteFolder: (folderPath: string) => Promise<void>;
   onRevertVersion: (versionId: number) => Promise<void>;
   onDeleteVersion: (versionId: number) => Promise<void>;
   onCompareVersion: (versionId: number) => Promise<void>;
@@ -64,6 +67,7 @@ const Sidebar = ({
   canManageMembers,
   canSaveVersions,
   canRevertVersions,
+  onDeleteRoom,
   onSaveVersion,
   onJoinRoom,
   onAddMember,
@@ -71,6 +75,8 @@ const Sidebar = ({
   onUpdateMemberPermissions,
   onSelectFile,
   onCreateFile,
+  onDeleteFile,
+  onDeleteFolder,
   onRevertVersion,
   onDeleteVersion,
   onCompareVersion,
@@ -229,6 +235,17 @@ const Sidebar = ({
           />
           <Button size="sm" className="h-7 text-xs px-2 shrink-0" onClick={handleJoin}>Join</Button>
         </div>
+        {canManageMembers && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="mt-2 h-7 w-full text-xs gap-1.5 border-destructive/30 text-destructive hover:bg-destructive/10"
+            onClick={() => void onDeleteRoom()}
+          >
+            <Trash2 className="h-3 w-3" /> Delete room
+          </Button>
+        )}
       </div>
 
       <div className="p-3 border-b border-border">
@@ -436,47 +453,78 @@ const Sidebar = ({
             const folderFiles = (filesByFolder[folder] || []).sort((a, b) => a.filePath.localeCompare(b.filePath));
 
             return (
-              <div key={folder || "root-folder"}>
-                <button
-                  type="button"
-                  className={`w-full text-left text-[11px] rounded px-1 py-1 flex items-center gap-1 ${
-                    selectedFolder === folder ? "bg-primary/15 text-primary" : "text-foreground hover:bg-surface"
-                  }`}
-                  style={{ paddingLeft: `${4 + depth * 10}px` }}
-                  onClick={() => {
-                    setSelectedFolder(folder);
-                    if (folder !== "") {
-                      toggleFolder(folder);
-                    }
-                  }}
-                >
-                  {folder !== "" ? (isExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />) : <span className="w-3" />}
-                  {isExpanded ? <FolderOpen className="h-3 w-3" /> : <Folder className="h-3 w-3" />}
-                  <span className="truncate">{getDisplayFolderName(folder)}</span>
-                </button>
+              <div key={folder || "root-folder"} className="relative">
+                <div className={`w-full text-left text-[11px] rounded px-1 py-1 flex items-center gap-1 ${
+                  selectedFolder === folder ? "bg-primary/15 text-primary" : "text-foreground hover:bg-surface"
+                }`} style={{ paddingLeft: `${4 + depth * 10}px` }}>
+                  <button
+                    type="button"
+                    className="flex min-w-0 flex-1 items-center gap-1 text-left"
+                    onClick={() => {
+                      setSelectedFolder(folder);
+                      if (folder !== "") {
+                        toggleFolder(folder);
+                      }
+                    }}
+                  >
+                    {folder !== "" ? (isExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />) : <span className="w-3" />}
+                    {isExpanded ? <FolderOpen className="h-3 w-3" /> : <Folder className="h-3 w-3" />}
+                    <span className="truncate">{getDisplayFolderName(folder)}</span>
+                  </button>
+                  {canManageMembers && folder !== "" && (
+                    <button
+                      type="button"
+                      className="rounded p-1 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        void onDeleteFolder(folder);
+                      }}
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </button>
+                  )}
+                </div>
 
                 {isExpanded && folderFiles.map((file) => {
                   const fileName = file.filePath.includes("/") ? file.filePath.slice(file.filePath.lastIndexOf("/") + 1) : file.filePath;
                   const lock = fileLocks[file.id];
                   const lockedByOther = Boolean(lock && lock.lockedByEmail.toLowerCase() !== currentUserEmail.toLowerCase());
                   return (
-                    <button
+                    <div
                       key={file.id}
-                      type="button"
                       className={`w-full text-left text-[11px] rounded px-1 py-0.5 flex items-center gap-1 ${
                         activeFileId === file.id ? "bg-primary/15 text-primary" : "text-foreground hover:bg-surface"
                       }`}
                       style={{ paddingLeft: `${22 + depth * 10}px` }}
-                      onClick={() => void onSelectFile(file.id)}
                     >
-                      <FileText className="h-3 w-3" />
-                      <span className="truncate">{fileName}</span>
-                      {lock ? (
-                        <span className={`ml-auto text-[9px] px-1 rounded ${lockedByOther ? "bg-destructive/15 text-destructive" : "bg-primary/15 text-primary"}`}>
-                          {lockedByOther ? `locked:${lock.lockedByName}` : "locked"}
-                        </span>
-                      ) : null}
-                    </button>
+                      <button
+                        type="button"
+                        className="flex min-w-0 flex-1 items-center gap-1 text-left"
+                        onClick={() => void onSelectFile(file.id)}
+                      >
+                        <FileText className="h-3 w-3" />
+                        <span className="truncate">{fileName}</span>
+                      </button>
+                      <div className="ml-auto flex items-center gap-1">
+                        {lock ? (
+                          <span className={`text-[9px] px-1 rounded ${lockedByOther ? "bg-destructive/15 text-destructive" : "bg-primary/15 text-primary"}`}>
+                            {lockedByOther ? `locked:${lock.lockedByName}` : "locked"}
+                          </span>
+                        ) : null}
+                        {canManageMembers && (
+                          <button
+                            type="button"
+                            className="rounded p-1 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              void onDeleteFile(file.id);
+                            }}
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
                   );
                 })}
               </div>

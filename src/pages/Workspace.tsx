@@ -24,6 +24,9 @@ import {
   compareVersions,
   createRoomFile,
   deleteFileVersion,
+  deleteFolder,
+  deleteRoom,
+  deleteRoomFile,
   downloadRoomFile,
   getFileComments,
   getFileVersions,
@@ -714,6 +717,117 @@ const Workspace = () => {
     }
   };
 
+  const reloadRoomFiles = useCallback(async (roomIdValue: number, shouldResetActiveFile: boolean) => {
+    const nextFiles = await getRoomFiles(roomIdValue);
+    setRoomFiles(nextFiles);
+
+    if (!shouldResetActiveFile) {
+      return;
+    }
+
+    if (nextFiles.length === 0) {
+      setActiveFileId(null);
+      setActiveFileUpdatedAt(null);
+      setActiveFileName("Untitled.java");
+      setCode(EMPTY_JAVA_CODE);
+      lastSyncedCodeRef.current = EMPTY_JAVA_CODE;
+      setVersions([]);
+      setComments([]);
+      return;
+    }
+
+    await handleSelectFile(nextFiles[0].id);
+  }, [handleSelectFile]);
+
+  const handleDeleteRoomWorkspace = async () => {
+    if (!room) {
+      return;
+    }
+
+    const confirmed = window.confirm(`Delete room ${room.roomName}? This removes all files and members.`);
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      await deleteRoom(room.id);
+      toast.success(`Deleted room ${room.roomName}`);
+      navigate("/dashboard");
+    } catch (error) {
+      toast.error(getUserFriendlyErrorMessage(error, "Unable to delete room"));
+    }
+  };
+
+  const handleDeleteRoomFile = async (fileId: number) => {
+    if (!room) {
+      return;
+    }
+
+    const file = roomFiles.find((entry) => entry.id === fileId);
+    const confirmed = window.confirm(`Delete file ${file?.filePath || fileId}?`);
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      await deleteRoomFile(room.id, fileId);
+      const shouldResetActiveFile = activeFileId === fileId;
+      await reloadRoomFiles(room.id, shouldResetActiveFile);
+      const activity = await getRoomActivity(room.id);
+      setRoomActivity(activity);
+      toast.success(`Deleted ${file?.filePath || "file"}`);
+    } catch (error) {
+      toast.error(getUserFriendlyErrorMessage(error, "Unable to delete file"));
+    }
+  };
+
+  const handleDeleteRoomFolder = async (folderPath: string) => {
+    if (!room) {
+      return;
+    }
+
+    const confirmed = window.confirm(`Delete folder ${folderPath} and all files inside it?`);
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      await deleteFolder(room.id, folderPath);
+      const shouldResetActiveFile = activeFileName === folderPath || activeFileName.startsWith(`${folderPath}/`);
+      await reloadRoomFiles(room.id, shouldResetActiveFile);
+      const activity = await getRoomActivity(room.id);
+      setRoomActivity(activity);
+      toast.success(`Deleted folder ${folderPath}`);
+    } catch (error) {
+      toast.error(getUserFriendlyErrorMessage(error, "Unable to delete folder"));
+    }
+  };
+
+  const handleDeleteStandaloneWorkspace = () => {
+    if (!isStandalone) {
+      return;
+    }
+
+    const confirmed = window.confirm(`Delete solo workspace ${activeFileName}?`);
+    if (!confirmed) {
+      return;
+    }
+
+    const storageKey = buildDraftStorageKey({
+      userEmail: user.email,
+      roomId: null,
+      fileId: null,
+      fileName: activeFileName,
+      isStandalone: true,
+    });
+    clearDraftSnapshot(storageKey);
+    setCode(EMPTY_JAVA_CODE);
+    setActiveFileName("Untitled.java");
+    setRenameDraft("Untitled.java");
+    toast.success("Solo workspace deleted");
+    navigate("/dashboard");
+  };
+
   const handleCompareVersion = async (versionId: number) => {
     if (!room || !activeFileId) {
       return;
@@ -1182,6 +1296,9 @@ const Workspace = () => {
               <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => void handleRenameFile()}>
                 Rename
               </Button>
+              <Button variant="outline" size="sm" className="h-7 text-xs border-destructive/30 text-destructive hover:bg-destructive/10" onClick={handleDeleteStandaloneWorkspace}>
+                Delete
+              </Button>
             </div>
           )}
           <input ref={fileInputRef} type="file" accept=".java" onChange={handleUpload} className="hidden" />
@@ -1216,6 +1333,7 @@ const Workspace = () => {
           canManageMembers={canManageMembers}
           canSaveVersions={canSaveVersions}
           canRevertVersions={canRevertVersions}
+          onDeleteRoom={handleDeleteRoomWorkspace}
           onSaveVersion={handleSaveVersion}
           onJoinRoom={handleJoinRoom}
           onAddMember={handleAddMember}
@@ -1223,6 +1341,8 @@ const Workspace = () => {
           onUpdateMemberPermissions={handleUpdateMemberPermissions}
           onSelectFile={handleSelectFile}
           onCreateFile={handleCreateFile}
+          onDeleteFile={handleDeleteRoomFile}
+          onDeleteFolder={handleDeleteRoomFolder}
           onRevertVersion={handleRevertVersion}
           onDeleteVersion={handleDeleteVersion}
           onCompareVersion={handleCompareVersion}
