@@ -51,6 +51,32 @@ export function clearDraftSnapshot(key: string): void {
   }
 }
 
+export function renameDraftSnapshot(
+  oldKey: string,
+  newKey: string,
+  nextFileName: string,
+  nextSavedAt = new Date().toISOString()
+): void {
+  try {
+    const raw = window.localStorage.getItem(oldKey);
+    if (!raw) {
+      return;
+    }
+
+    const parsed = JSON.parse(raw) as DraftSnapshot;
+    const nextSnapshot: DraftSnapshot = {
+      ...parsed,
+      fileName: nextFileName,
+      savedAt: nextSavedAt,
+    };
+
+    window.localStorage.setItem(newKey, JSON.stringify(nextSnapshot));
+    window.localStorage.removeItem(oldKey);
+  } catch {
+    // Ignore storage failures.
+  }
+}
+
 export function isDraftNewerThanServer(draft: DraftSnapshot, serverUpdatedAt?: string | null): boolean {
   const draftTime = Date.parse(draft.savedAt);
   if (Number.isNaN(draftTime)) {

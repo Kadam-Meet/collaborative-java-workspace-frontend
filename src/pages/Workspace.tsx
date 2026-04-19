@@ -7,6 +7,7 @@ import AnalysisPanel from "@/components/workspace/AnalysisPanel";
 import IssuesPanel from "@/components/workspace/IssuesPanel";
 import LearningPanel from "@/components/workspace/LearningPanel";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Download, Upload, Zap, Hash, Users } from "lucide-react";
@@ -50,7 +51,7 @@ import {
 } from "@/api/workspaceApi";
 import type { ActivityFilters, CommentEntry, FileLockEntry, PendingInvitationSummary, RoomActivity, RoomFile, RoomMember, RoomSearchResults, RoomSummary, VersionCompareResult, VersionEntry } from "@/types/workspace.types";
 import { useAuth } from "@/hooks/useAuth";
-import { buildDraftStorageKey, clearDraftSnapshot, isDraftNewerThanServer, loadDraftSnapshot, saveDraftSnapshot } from "@/utils/draftStorage";
+import { buildDraftStorageKey, clearDraftSnapshot, isDraftNewerThanServer, loadDraftSnapshot, renameDraftSnapshot, saveDraftSnapshot } from "@/utils/draftStorage";
 import type { RoomRealtimeEvent } from "@/services/socketService";
 
 type RemoteSelectionState = {
@@ -95,6 +96,7 @@ const Workspace = () => {
   const [activeFileId, setActiveFileId] = useState<number | null>(null);
   const [activeFileUpdatedAt, setActiveFileUpdatedAt] = useState<string | null>(null);
   const [activeFileName, setActiveFileName] = useState("Untitled.java");
+  const [renameDraft, setRenameDraft] = useState("Untitled.java");
   const [loadingRoom, setLoadingRoom] = useState(true);
   const [localDraftSavedAt, setLocalDraftSavedAt] = useState<Date | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -121,6 +123,12 @@ const Workspace = () => {
   useEffect(() => {
     codeRef.current = code;
   }, [code]);
+
+  useEffect(() => {
+    if (isStandalone) {
+      setRenameDraft(activeFileName);
+    }
+  }, [activeFileName, isStandalone]);
 
   if (!user) {
     return <Navigate to="/login" replace />;
@@ -345,6 +353,62 @@ const Workspace = () => {
 
     triggerDownload(new Blob([code], { type: "text/x-java-source" }), activeFileName || "Untitled.java");
     toast.success("File downloaded!");
+  };
+
+  const handleRenameFile = async () => {
+    const trimmed = renameDraft.trim();
+    if (!trimmed) {
+      toast.error("Enter a file name first");
+      return;
+    }
+
+    const normalizedName = trimmed.endsWith(".java") ? trimmed : `${trimmed}.java`;
+    if (normalizedName === activeFileName) {
+      return;
+    }
+
+    if (!isStandalone && room && activeFileId && activeFileUpdatedAt) {
+      try {
+        const saved = await saveRoomFile(room.id, activeFileId, code, activeFileUpdatedAt, normalizedName);
+        setActiveFileName(saved.filePath || normalizedName);
+        setActiveFileUpdatedAt(saved.updatedAt);
+        lastSyncedCodeRef.current = saved.content || code;
+        const files = await getRoomFiles(room.id);
+        setRoomFiles(files);
+        const activity = await getRoomActivity(room.id);
+        setRoomActivity(activity);
+        setRenameDraft(saved.filePath || normalizedName);
+        toast.success(`Renamed to ${saved.filePath || normalizedName}`);
+      } catch (error) {
+        toast.error(getUserFriendlyErrorMessage(error, "Unable to rename file"));
+      }
+      return;
+    }
+
+    if (!isStandalone) {
+      toast.info("Open a file first to rename it");
+      return;
+    }
+
+    const oldKey = buildDraftStorageKey({
+      userEmail: user.email,
+      roomId: null,
+      fileId: null,
+      fileName: activeFileName,
+      isStandalone: true,
+    });
+    const newKey = buildDraftStorageKey({
+      userEmail: user.email,
+      roomId: null,
+      fileId: null,
+      fileName: normalizedName,
+      isStandalone: true,
+    });
+
+    renameDraftSnapshot(oldKey, newKey, normalizedName);
+    setActiveFileName(normalizedName);
+    setRenameDraft(normalizedName);
+    toast.success(`Renamed to ${normalizedName}`);
   };
 
   const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1100,6 +1164,25 @@ const Workspace = () => {
           </span>
           {!backendAvailable && (
             <span className="text-[10px] text-warning px-2">Live error highlight offline</span>
+          )}
+          {(isStandalone || activeFileId) && (
+            <div className="flex items-center gap-1.5">
+              <Input
+                value={renameDraft}
+                onChange={(event) => setRenameDraft(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    void handleRenameFile();
+                  }
+                }}
+                className="h-7 w-44 text-xs"
+                placeholder="Rename file"
+              />
+              <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => void handleRenameFile()}>
+                Rename
+              </Button>
+            </div>
           )}
           <input ref={fileInputRef} type="file" accept=".java" onChange={handleUpload} className="hidden" />
           <Button variant="ghost" size="sm" className="h-7 text-xs gap-1" onClick={() => fileInputRef.current?.click()}>
