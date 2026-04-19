@@ -23,7 +23,6 @@ import {
   acquireFileLock,
   addRoomMember,
   addFileComment,
-  compareVersions,
   createSoloWorkspace,
   createRoomFile,
   deleteFileVersion,
@@ -48,6 +47,7 @@ import {
   getRoomMembers,
   joinRoom,
   listFileLocks,
+  mergeFileVersion,
   getSoloWorkspace,
   replyToComment,
   revertFileVersion,
@@ -142,6 +142,7 @@ const Workspace = () => {
   const [savingWorkspace, setSavingWorkspace] = useState(false);
   const [showVersionLabelDialog, setShowVersionLabelDialog] = useState(false);
   const [versionLabelDraft, setVersionLabelDraft] = useState("");
+  const [compareVersionId, setCompareVersionId] = useState<number | null>(null);
 
   useEffect(() => {
     codeRef.current = code;
@@ -1143,19 +1144,116 @@ const Workspace = () => {
     }
 
     try {
-      const currentVersion = await getVersionDetail(room.id, activeFileId, versionId);
-      const compareTarget = versions.find((entry) => entry.id !== versionId)?.id;
-      if (!compareTarget) {
-        toast.info("At least two versions are required for compare");
-        return;
-      }
-      const comparison = await compareVersions(room.id, activeFileId, compareTarget, versionId);
-      setVersionComparison(comparison);
-      if (!currentVersion.content) {
-        toast.info("Loaded comparison for selected versions");
-      }
+      const snapshot = await getVersionDetail(room.id, activeFileId, versionId);
+      setVersionComparison({
+        fileId: activeFileId,
+        filePath: snapshot.filePath || activeFileName,
+        fromVersionId: versionId,
+        toVersionId: activeFileId,
+        fromLabel: `v${snapshot.versionNumber}`,
+        toLabel: "current",
+        fromContent: snapshot.content || "",
+        toContent: codeRef.current,
+      });
+      setCompareVersionId(versionId);
+      toast.info("Loaded comparison with current workspace state");
     } catch (error) {
       toast.error(getUserFriendlyErrorMessage(error, "Unable to compare versions"));
+    }
+  };
+
+  const buildMergedContent = (incomingContent: string, currentContent: string) => {
+    if (incomingContent === currentContent) {
+      return currentContent;
+    }
+
+    return [
+      "<<<<<<< CURRENT",
+      currentContent,
+      "=======",
+      incomingContent,
+      ">>>>>>> MERGED VERSION",
+    ].join("\n");
+  };
+
+  const handleDirectMergeVersion = async (versionId: number) => {
+    if (!room || !activeFileId) {
+      return;
+    }
+
+    const confirmed = window.confirm("Directly merge this version into the current file?");
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      const merged = await mergeFileVersion(room.id, activeFileId, versionId, {
+        versionMessage: `Direct merge from v${versionId}`,
+      });
+      setCode(merged.content || "");
+      lastSyncedCodeRef.current = merged.content || "";
+      setActiveFileUpdatedAt(merged.updatedAt);
+      const [files, history, activity] = await Promise.all([
+        getRoomFiles(room.id),
+        getFileVersions(room.id, activeFileId),
+        getRoomActivity(room.id),
+      ]);
+      setRoomFiles(files);
+      setVersions(history.slice(0, 5));
+      setRoomActivity(activity);
+      toast.success("Direct merge applied");
+    } catch (error) {
+      toast.error(getUserFriendlyErrorMessage(error, "Unable to merge version"));
+    }
+  };
+
+  const handleCompareMergeVersion = async (versionId: number) => {
+    if (!room || !activeFileId) {
+      return;
+    }
+
+    try {
+      const snapshot = await getVersionDetail(room.id, activeFileId, versionId);
+      const incoming = snapshot.content || "";
+      const current = codeRef.current;
+
+      setVersionComparison({
+        fileId: activeFileId,
+        filePath: snapshot.filePath || activeFileName,
+        fromVersionId: versionId,
+        toVersionId: activeFileId,
+        fromLabel: `v${snapshot.versionNumber}`,
+        toLabel: "current",
+        fromContent: incoming,
+        toContent: current,
+      });
+      setCompareVersionId(versionId);
+
+      const confirmed = window.confirm("Apply compare+merge now? A merged result with conflict markers will be created when needed.");
+      if (!confirmed) {
+        return;
+      }
+
+      const mergedContent = buildMergedContent(incoming, current);
+      const merged = await mergeFileVersion(room.id, activeFileId, versionId, {
+        content: mergedContent,
+        versionMessage: `Compare+merge from v${snapshot.versionNumber}`,
+      });
+
+      setCode(merged.content || "");
+      lastSyncedCodeRef.current = merged.content || "";
+      setActiveFileUpdatedAt(merged.updatedAt);
+      const [files, history, activity] = await Promise.all([
+        getRoomFiles(room.id),
+        getFileVersions(room.id, activeFileId),
+        getRoomActivity(room.id),
+      ]);
+      setRoomFiles(files);
+      setVersions(history.slice(0, 5));
+      setRoomActivity(activity);
+      toast.success("Compare+merge applied");
+    } catch (error) {
+      toast.error(getUserFriendlyErrorMessage(error, "Unable to compare and merge version"));
     }
   };
 
@@ -1256,6 +1354,7 @@ const Workspace = () => {
   const canEditFiles = isStandalone || canManageMembers || Boolean(currentUserMembership?.canEditFiles);
   const canSaveVersions = isStandalone || canManageMembers || Boolean(currentUserMembership?.canSaveVersions);
   const canRevertVersions = isStandalone || canManageMembers || Boolean(currentUserMembership?.canRevertVersions);
+  const canEditActiveFile = canEditFiles;
   const visibleMembers = isStandalone
     ? [{
         id: 0,
@@ -1328,25 +1427,25 @@ const Workspace = () => {
       return;
     }
 
-    if ((event.type === "FILE_UPDATED" || event.type === "FILE_UPLOADED" || event.type === "VERSION_REVERTED") && !isCurrentUserEvent) {
+    if ((event.type === "FILE_UPDATED" || event.type === "FILE_UPLOADED" || event.type === "VERSION_REVERTED" || event.type === "VERSION_MERGED") && !isCurrentUserEvent) {
       const fileId = Number(event.payload?.fileId ?? -1);
       const fileContent = typeof event.payload?.content === "string" ? event.payload.content : null;
       const updatedAt = typeof event.payload?.updatedAt === "string" ? event.payload.updatedAt : null;
 
       if (activeFileId && fileId === activeFileId && fileContent != null) {
-        if (codeRef.current === lastSyncedCodeRef.current) {
-          setCode(fileContent);
-          lastSyncedCodeRef.current = fileContent;
-          if (updatedAt) {
-            setActiveFileUpdatedAt(updatedAt);
-          }
-        } else {
-          toast.warning("Remote changes detected. Save or refresh to merge latest updates.");
+        const hadLocalUnsyncedChanges = codeRef.current !== lastSyncedCodeRef.current;
+        setCode(fileContent);
+        lastSyncedCodeRef.current = fileContent;
+        if (updatedAt) {
+          setActiveFileUpdatedAt(updatedAt);
+        }
+        if (hadLocalUnsyncedChanges) {
+          toast.info("Remote updates applied to this file.");
         }
       }
     }
 
-    if (["FILE_CREATED", "FILE_UPDATED", "FILE_UPLOADED", "VERSION_SAVED", "VERSION_REVERTED"].includes(event.type)) {
+    if (["FILE_CREATED", "FILE_UPDATED", "FILE_UPLOADED", "VERSION_SAVED", "VERSION_REVERTED", "VERSION_MERGED"].includes(event.type)) {
       void (async () => {
         try {
           const [files, activity] = await Promise.all([getRoomFiles(room.id), getRoomActivity(room.id)]);
@@ -1624,7 +1723,7 @@ const Workspace = () => {
   const autoSave = useAutoSave({
     enabled: isStandalone
       ? shouldPersistSoloWorkspace
-      : Boolean(room && activeFileId && activeFileUpdatedAt),
+      : Boolean(room && activeFileId && activeFileUpdatedAt && canEditActiveFile),
     value: `${code}\u0000${activeFileName}`,
     hasChanges: isStandalone
       ? code !== lastSyncedCodeRef.current || activeFileName !== lastSyncedNameRef.current
@@ -1769,7 +1868,6 @@ const Workspace = () => {
           pendingInvitations={pendingInvitations}
           activeUsers={activeUsers}
           activeEditors={activeEditors}
-          fileLocks={fileLocks}
           currentUserEmail={user.email}
           roomFiles={roomFiles}
           versions={versions}
@@ -1793,11 +1891,14 @@ const Workspace = () => {
           onRevertVersion={handleRevertVersion}
           onDeleteVersion={handleDeleteVersion}
           onCompareVersion={handleCompareVersion}
+          onDirectMergeVersion={handleDirectMergeVersion}
+          onCompareMergeVersion={handleCompareMergeVersion}
         />
         <EditorPanel
           code={code}
           fileName={activeFileName}
           onChange={handleEditorCodeChange}
+          readOnly={!canEditActiveFile}
           onSelectionChange={handleEditorSelectionChange}
           remoteSelections={editorRemoteSelections}
           issues={issues}
@@ -1968,7 +2069,28 @@ const Workspace = () => {
                 <textarea className="h-24 rounded border border-border bg-surface p-2 text-[10px]" readOnly value={versionComparison.fromContent} />
                 <textarea className="h-24 rounded border border-border bg-surface p-2 text-[10px]" readOnly value={versionComparison.toContent} />
               </div>
-              <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setVersionComparison(null)}>Close compare</Button>
+              <div className="flex gap-1.5">
+                {compareVersionId && room && activeFileId && (
+                  <Button
+                    size="sm"
+                    className="h-7 text-xs"
+                    onClick={() => void handleCompareMergeVersion(compareVersionId)}
+                  >
+                    Merge compared version
+                  </Button>
+                )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={() => {
+                    setVersionComparison(null);
+                    setCompareVersionId(null);
+                  }}
+                >
+                  Close compare
+                </Button>
+              </div>
             </div>
           )}
         </div>

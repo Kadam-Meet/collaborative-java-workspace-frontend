@@ -40,11 +40,14 @@ export function connectRoomStream(roomId: number, handlers: SocketHandlers): () 
 		"ROOM_JOINED",
 		"MEMBER_ADDED",
 		"MEMBER_PERMISSIONS_UPDATED",
+		"FILE_LOCKED",
+		"FILE_UNLOCKED",
 		"FILE_CREATED",
 		"FILE_UPDATED",
 		"FILE_UPLOADED",
 		"VERSION_SAVED",
 		"VERSION_REVERTED",
+		"VERSION_MERGED",
 	];
 
 	for (const eventName of eventNames) {

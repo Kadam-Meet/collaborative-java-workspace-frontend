@@ -16,6 +16,7 @@ import type {
   VersionCompareResult,
   VersionDeleteResult,
   VersionEntry,
+  VersionMergeResult,
   VersionRevertResult,
 } from "@/types/workspace.types";
 import { apiBlob, apiJson } from "@/api/axiosClient";
@@ -314,6 +315,19 @@ export function deleteFileVersion(roomId: number, fileId: number, versionId: num
   return workspaceRequest<VersionDeleteResult>(
     `/api/workspaces/rooms/${roomId}/files/${fileId}/versions/${versionId}`,
     "DELETE"
+  );
+}
+
+export function mergeFileVersion(
+  roomId: number,
+  fileId: number,
+  versionId: number,
+  payload?: { content?: string; versionMessage?: string }
+): Promise<VersionMergeResult> {
+  return workspaceRequest<VersionMergeResult>(
+    `/api/workspaces/rooms/${roomId}/files/${fileId}/versions/${versionId}/merge`,
+    "POST",
+    payload
   );
 }
 

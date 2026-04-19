@@ -17,7 +17,6 @@ interface SidebarProps {
     fileName: string;
     typing: boolean;
   }>;
-  fileLocks: Record<number, { lockedByEmail: string; lockedByName: string }>;
   currentUserEmail: string;
   roomFiles: RoomFile[];
   versions: VersionEntry[];
@@ -49,6 +48,8 @@ interface SidebarProps {
   onRevertVersion: (versionId: number) => Promise<void>;
   onDeleteVersion: (versionId: number) => Promise<void>;
   onCompareVersion: (versionId: number) => Promise<void>;
+  onDirectMergeVersion: (versionId: number) => Promise<void>;
+  onCompareMergeVersion: (versionId: number) => Promise<void>;
 }
 
 const Sidebar = ({
@@ -58,7 +59,6 @@ const Sidebar = ({
   pendingInvitations,
   activeUsers,
   activeEditors,
-  fileLocks,
   currentUserEmail,
   roomFiles,
   versions,
@@ -82,6 +82,8 @@ const Sidebar = ({
   onRevertVersion,
   onDeleteVersion,
   onCompareVersion,
+  onDirectMergeVersion,
+  onCompareMergeVersion,
 }: SidebarProps) => {
   const [joinRoom, setJoinRoom] = useState("");
   const [inviteEmail, setInviteEmail] = useState("");
@@ -327,8 +329,6 @@ const Sidebar = ({
 
                 {isExpanded && folderFiles.map((file) => {
                   const fileName = file.filePath.includes("/") ? file.filePath.slice(file.filePath.lastIndexOf("/") + 1) : file.filePath;
-                  const lock = fileLocks[file.id];
-                  const lockedByOther = Boolean(lock && lock.lockedByEmail.toLowerCase() !== currentUserEmail.toLowerCase());
                   return (
                     <div
                       key={file.id}
@@ -346,11 +346,6 @@ const Sidebar = ({
                         <span className="truncate">{fileName}</span>
                       </button>
                       <div className="ml-auto flex items-center gap-1">
-                        {lock ? (
-                          <span className={`text-[9px] px-1 rounded ${lockedByOther ? "bg-destructive/15 text-destructive" : "bg-primary/15 text-primary"}`}>
-                            {lockedByOther ? `locked:${lock.lockedByName}` : "locked"}
-                          </span>
-                        ) : null}
                         {canEditFiles && (
                           <button
                             type="button"
@@ -414,6 +409,9 @@ const Sidebar = ({
           canDelete={canSaveVersions}
           onDelete={onDeleteVersion}
           onCompare={onCompareVersion}
+          onDirectMerge={onDirectMergeVersion}
+          onCompareMerge={onCompareMergeVersion}
+          canMerge={canEditFiles}
         />
       </div>
 

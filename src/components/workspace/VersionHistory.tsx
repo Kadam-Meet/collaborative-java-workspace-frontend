@@ -7,13 +7,27 @@ interface VersionHistoryProps {
 	onRevert: (versionId: number) => Promise<void>;
 	onDelete: (versionId: number) => Promise<void>;
 	onCompare?: (versionId: number) => Promise<void>;
+	onDirectMerge?: (versionId: number) => Promise<void>;
+	onCompareMerge?: (versionId: number) => Promise<void>;
 	loading?: boolean;
 	canRevert?: boolean;
 	canDelete?: boolean;
+	canMerge?: boolean;
 }
 
 
-const VersionHistory = ({ versions, onRevert, onDelete, onCompare, loading = false, canRevert = false, canDelete = false }: VersionHistoryProps) => {
+const VersionHistory = ({
+	versions,
+	onRevert,
+	onDelete,
+	onCompare,
+	onDirectMerge,
+	onCompareMerge,
+	loading = false,
+	canRevert = false,
+	canDelete = false,
+	canMerge = false,
+}: VersionHistoryProps) => {
 	const visibleVersions = versions.slice(0, 5);
 
 	if (loading) {
@@ -67,6 +81,26 @@ const VersionHistory = ({ versions, onRevert, onDelete, onCompare, loading = fal
 									onClick={() => void onCompare(version.id)}
 								>
 									Compare
+								</Button>
+							)}
+							{canMerge && onCompareMerge && (
+								<Button
+									variant="ghost"
+									size="sm"
+									className="h-5 px-1.5 text-[10px] opacity-0 group-hover:opacity-100 transition-opacity"
+									onClick={() => void onCompareMerge(version.id)}
+								>
+									Compare+Merge
+								</Button>
+							)}
+							{canMerge && onDirectMerge && (
+								<Button
+									variant="ghost"
+									size="sm"
+									className="h-5 px-1.5 text-[10px] opacity-0 group-hover:opacity-100 transition-opacity"
+									onClick={() => void onDirectMerge(version.id)}
+								>
+									Direct Merge
 								</Button>
 							)}
 						</div>

@@ -7,6 +7,7 @@ interface EditorPanelProps {
   code: string;
   fileName?: string;
   onChange: (value: string) => void;
+  readOnly?: boolean;
   issues?: WorkspaceIssue[];
   onSelectionChange?: (selection: {
     startLine: number;
@@ -36,6 +37,7 @@ const EditorPanel = ({
   code,
   fileName = "DataProcessor.java",
   onChange,
+  readOnly = false,
   issues = [],
   onSelectionChange,
   remoteSelections = [],
@@ -135,6 +137,7 @@ const EditorPanel = ({
           onChange={(value) => onChange(value || "")}
           onMount={handleEditorDidMount}
           options={{
+            readOnly,
             fontSize: 13,
             fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
             minimap: { enabled: true, scale: 1 },

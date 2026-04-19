@@ -75,6 +75,16 @@ export interface VersionDeleteResult {
   versionNumber: number;
 }
 
+export interface VersionMergeResult {
+  fileId: number;
+  filePath: string;
+  content: string;
+  mergedFromVersion: number;
+  newVersion: number;
+  updatedAt: string;
+  updatedByEmail: string | null;
+}
+
 export interface VersionCompareResult {
   fileId: number;
   filePath: string;
