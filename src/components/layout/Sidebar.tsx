@@ -219,7 +219,7 @@ const Sidebar = ({
   };
 
   return (
-    <aside className="w-64 workspace-panel flex flex-col overflow-hidden shrink-0">
+    <aside className="w-64 workspace-panel shrink-0 overflow-y-auto">
       {/* Room Info */}
       <div className="p-3 border-b border-border">
         <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Room Info</h3>
@@ -250,169 +250,7 @@ const Sidebar = ({
         )}
       </div>
 
-      <div className="p-3 border-b border-border">
-        <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Members</h3>
-        <div className="space-y-1.5 mb-2 max-h-28 overflow-y-auto">
-          {roomMembers.map((member) => (
-            <div key={member.id} className="text-[11px] text-foreground space-y-1.5">
-              <div className="flex items-center justify-between gap-2">
-                <span className="truncate">{member.name}</span>
-                <div className="flex items-center gap-1.5">
-                  <span className={`inline-block h-1.5 w-1.5 rounded-full ${onlineEmails.has(member.email.trim().toLowerCase()) ? "bg-green-500" : "bg-muted-foreground/50"}`} />
-                  <span className="text-[10px] text-muted-foreground">{onlineEmails.has(member.email.trim().toLowerCase()) ? "online" : "offline"}</span>
-                  <span className="text-[10px] text-muted-foreground">{member.owner ? "owner" : "member"}</span>
-                </div>
-              </div>
-              {canManageMembers && !member.owner && (
-                <div className="space-y-1">
-                  {editingMemberId !== member.id && (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="h-6 px-2 text-[10px]"
-                      onClick={() => startEditingMember(member)}
-                    >
-                      Edit settings
-                    </Button>
-                  )}
-
-                  {editingMemberId === member.id && permissionDraft && (
-                    <div className="rounded border border-border bg-surface p-2 space-y-1.5">
-                      <label className="flex items-center gap-1.5 text-[10px] text-foreground">
-                        <input
-                          type="checkbox"
-                          checked={permissionDraft.canEditFiles}
-                          onChange={(e) =>
-                            setPermissionDraft((prev) => (prev ? { ...prev, canEditFiles: e.target.checked } : prev))
-                          }
-                        />
-                        Edit files
-                      </label>
-                      <label className="flex items-center gap-1.5 text-[10px] text-foreground">
-                        <input
-                          type="checkbox"
-                          checked={permissionDraft.canSaveVersions}
-                          onChange={(e) =>
-                            setPermissionDraft((prev) => (prev ? { ...prev, canSaveVersions: e.target.checked } : prev))
-                          }
-                        />
-                        Save versions
-                      </label>
-                      <label className="flex items-center gap-1.5 text-[10px] text-foreground">
-                        <input
-                          type="checkbox"
-                          checked={permissionDraft.canRevertVersions}
-                          onChange={(e) =>
-                            setPermissionDraft((prev) => (prev ? { ...prev, canRevertVersions: e.target.checked } : prev))
-                          }
-                        />
-                        Revert versions
-                      </label>
-                      <select
-                        className="h-6 w-full rounded border border-border bg-background px-1 text-[10px]"
-                        value={member.memberRole || "EDITOR"}
-                        onChange={(e) =>
-                          void onUpdateMemberPermissions(member.id, {
-                            memberRole: e.target.value as "ADMIN" | "EDITOR" | "REVIEWER" | "VIEWER",
-                          })
-                        }
-                      >
-                        <option value="ADMIN">Admin</option>
-                        <option value="EDITOR">Editor</option>
-                        <option value="REVIEWER">Reviewer</option>
-                        <option value="VIEWER">Viewer</option>
-                      </select>
-                      <div className="flex gap-1">
-                        <Button
-                          type="button"
-                          size="sm"
-                          className="h-6 px-2 text-[10px]"
-                          onClick={() => void saveMemberPermissions(member.id)}
-                        >
-                          Save
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          className="h-6 px-2 text-[10px]"
-                          onClick={cancelEditingMember}
-                        >
-                          Cancel
-                        </Button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-        {canManageMembers && (
-          <div className="flex gap-1.5">
-            <Input
-              placeholder="Add by email"
-              value={inviteEmail}
-              onChange={(e) => setInviteEmail(e.target.value)}
-              className="h-7 text-xs bg-surface border-border"
-            />
-            <Button size="sm" className="h-7 text-xs px-2 shrink-0" onClick={handleInvite}>Add</Button>
-          </div>
-        )}
-      </div>
-
-      {canManageMembers && (
-        <div className="p-3 border-b border-border">
-          <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Pending invites</h3>
-          {pendingInvitations.length === 0 ? (
-            <p className="text-[11px] text-muted-foreground">No pending invitations.</p>
-          ) : (
-            <div className="space-y-1.5 max-h-32 overflow-y-auto">
-              {pendingInvitations.map((invitation) => (
-                <div key={invitation.id} className="rounded border border-border bg-surface px-2 py-1.5 text-[11px] space-y-1">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="truncate text-foreground">{invitation.inviteeEmail}</span>
-                    <span className="text-[10px] text-muted-foreground">{invitation.status}</span>
-                  </div>
-                  <p className="text-muted-foreground truncate">
-                    {invitation.roomCode || roomCode} • {invitation.expiresAt ? new Date(invitation.expiresAt).toLocaleDateString() : "no expiry"}
-                  </p>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="h-6 px-2 text-[10px]"
-                    onClick={() => void onRevokeInvitation(invitation.inviteeEmail)}
-                  >
-                    Revoke
-                  </Button>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      <div className="p-3 border-b border-border">
-        <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Live editors</h3>
-        {activeEditors.length === 0 ? (
-          <p className="text-[11px] text-muted-foreground">No collaborator is actively editing a file right now.</p>
-        ) : (
-          <div className="space-y-1.5 max-h-32 overflow-y-auto">
-            {activeEditors.map((editor) => (
-              <div key={editor.email} className="rounded border border-border bg-surface px-2 py-1.5 text-[11px] space-y-0.5">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="truncate text-foreground">{editor.label}</span>
-                  <span className="text-[10px] text-muted-foreground">{editor.typing ? "typing" : "editing"}</span>
-                </div>
-                <p className="text-muted-foreground truncate">{editor.fileName}</p>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
+      {/* Files */}
       <div className="p-3 border-b border-border">
         <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Files</h3>
         <p className="text-[10px] text-muted-foreground mb-2 truncate">
@@ -537,6 +375,26 @@ const Sidebar = ({
         </div>
       </div>
 
+      {/* Live Editors */}
+      <div className="p-3 border-b border-border">
+        <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Live editors</h3>
+        {activeEditors.length === 0 ? (
+          <p className="text-[11px] text-muted-foreground">No collaborator is actively editing a file right now.</p>
+        ) : (
+          <div className="space-y-1.5 max-h-32 overflow-y-auto">
+            {activeEditors.map((editor) => (
+              <div key={editor.email} className="rounded border border-border bg-surface px-2 py-1.5 text-[11px] space-y-0.5">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="truncate text-foreground">{editor.label}</span>
+                  <span className="text-[10px] text-muted-foreground">{editor.typing ? "typing" : "editing"}</span>
+                </div>
+                <p className="text-muted-foreground truncate">{editor.fileName}</p>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
       {/* Version Control */}
       <div className="p-3 border-b border-border">
         <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Version Control</h3>
@@ -546,8 +404,8 @@ const Sidebar = ({
       </div>
 
       {/* Version History */}
-      <div className="flex-1 overflow-y-auto p-3">
-        <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">History</h3>
+      <div className="p-3 border-b border-border">
+        <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Version History</h3>
         <VersionHistory
           versions={versions}
           loading={loadingVersions}
@@ -558,6 +416,152 @@ const Sidebar = ({
           onCompare={onCompareVersion}
         />
       </div>
+
+      {/* Members */}
+      <div className="p-3 border-b border-border">
+        <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Members</h3>
+        <div className="space-y-1.5 mb-2 max-h-40 overflow-y-auto">
+          {roomMembers.map((member) => (
+            <div key={member.id} className="text-[11px] text-foreground space-y-1.5">
+              <div className="flex items-center justify-between gap-2">
+                <span className="truncate">{member.name}</span>
+                <div className="flex items-center gap-1.5">
+                  <span className={`inline-block h-1.5 w-1.5 rounded-full ${onlineEmails.has(member.email.trim().toLowerCase()) ? "bg-green-500" : "bg-muted-foreground/50"}`} />
+                  <span className="text-[10px] text-muted-foreground">{onlineEmails.has(member.email.trim().toLowerCase()) ? "online" : "offline"}</span>
+                  <span className="text-[10px] text-muted-foreground">{member.owner ? "owner" : "member"}</span>
+                </div>
+              </div>
+              {canManageMembers && !member.owner && (
+                <div className="space-y-1">
+                  {editingMemberId !== member.id && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-6 px-2 text-[10px]"
+                      onClick={() => startEditingMember(member)}
+                    >
+                      Edit settings
+                    </Button>
+                  )}
+
+                  {editingMemberId === member.id && permissionDraft && (
+                    <div className="rounded border border-border bg-surface p-2 space-y-1.5">
+                      <label className="flex items-center gap-1.5 text-[10px] text-foreground">
+                        <input
+                          type="checkbox"
+                          checked={permissionDraft.canEditFiles}
+                          onChange={(e) =>
+                            setPermissionDraft((prev) => (prev ? { ...prev, canEditFiles: e.target.checked } : prev))
+                          }
+                        />
+                        Edit files
+                      </label>
+                      <label className="flex items-center gap-1.5 text-[10px] text-foreground">
+                        <input
+                          type="checkbox"
+                          checked={permissionDraft.canSaveVersions}
+                          onChange={(e) =>
+                            setPermissionDraft((prev) => (prev ? { ...prev, canSaveVersions: e.target.checked } : prev))
+                          }
+                        />
+                        Save versions
+                      </label>
+                      <label className="flex items-center gap-1.5 text-[10px] text-foreground">
+                        <input
+                          type="checkbox"
+                          checked={permissionDraft.canRevertVersions}
+                          onChange={(e) =>
+                            setPermissionDraft((prev) => (prev ? { ...prev, canRevertVersions: e.target.checked } : prev))
+                          }
+                        />
+                        Revert versions
+                      </label>
+                      <select
+                        className="h-6 w-full rounded border border-border bg-background px-1 text-[10px]"
+                        value={member.memberRole || "EDITOR"}
+                        onChange={(e) =>
+                          void onUpdateMemberPermissions(member.id, {
+                            memberRole: e.target.value as "ADMIN" | "EDITOR" | "REVIEWER" | "VIEWER",
+                          })
+                        }
+                      >
+                        <option value="ADMIN">Admin</option>
+                        <option value="EDITOR">Editor</option>
+                        <option value="REVIEWER">Reviewer</option>
+                        <option value="VIEWER">Viewer</option>
+                      </select>
+                      <div className="flex gap-1">
+                        <Button
+                          type="button"
+                          size="sm"
+                          className="h-6 px-2 text-[10px]"
+                          onClick={() => void saveMemberPermissions(member.id)}
+                        >
+                          Save
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-6 px-2 text-[10px]"
+                          onClick={cancelEditingMember}
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+        {canManageMembers && (
+          <div className="flex gap-1.5">
+            <Input
+              placeholder="Add by email"
+              value={inviteEmail}
+              onChange={(e) => setInviteEmail(e.target.value)}
+              className="h-7 text-xs bg-surface border-border"
+            />
+            <Button size="sm" className="h-7 text-xs px-2 shrink-0" onClick={handleInvite}>Add</Button>
+          </div>
+        )}
+      </div>
+
+      {/* Pending Invites */}
+      {canManageMembers && (
+        <div className="p-3 border-b border-border">
+          <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Pending invites</h3>
+          {pendingInvitations.length === 0 ? (
+            <p className="text-[11px] text-muted-foreground">No pending invitations.</p>
+          ) : (
+            <div className="space-y-1.5 max-h-40 overflow-y-auto">
+              {pendingInvitations.map((invitation) => (
+                <div key={invitation.id} className="rounded border border-border bg-surface px-2 py-1.5 text-[11px] space-y-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="truncate text-foreground">{invitation.inviteeEmail}</span>
+                    <span className="text-[10px] text-muted-foreground">{invitation.status}</span>
+                  </div>
+                  <p className="text-muted-foreground truncate">
+                    {invitation.roomCode || roomCode} • {invitation.expiresAt ? new Date(invitation.expiresAt).toLocaleDateString() : "no expiry"}
+                  </p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-6 px-2 text-[10px]"
+                    onClick={() => void onRevokeInvitation(invitation.inviteeEmail)}
+                  >
+                    Revoke
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </aside>
   );
 };
