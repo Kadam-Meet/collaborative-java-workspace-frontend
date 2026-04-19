@@ -60,7 +60,7 @@ const Login = () => {
               <Label className="text-xs">Password</Label>
               <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" required />
             </div>
-            <Button type="submit" className="w-full" disabled={isSubmitting}>
+            <Button type="submit" preventRapidClick={false} className="w-full" disabled={isSubmitting}>
               {isSubmitting ? "Signing in..." : "Login"}
             </Button>
             <Button type="button" variant="outline" className="w-full gap-2" disabled>

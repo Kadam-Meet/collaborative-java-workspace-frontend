@@ -51,6 +51,8 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     ...props
   }, ref) => {
     const Comp = asChild ? Slot : "button";
+    const isSubmitIntent = !asChild && !onClick && props.type !== "button";
+    const shouldUseRapidClick = preventRapidClick && !isSubmitIntent;
     const [clickLocked, setClickLocked] = React.useState(false);
     const lockTimeoutRef = React.useRef<number | null>(null);
 
@@ -76,7 +78,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         return;
       }
 
-      if (!preventRapidClick) {
+      if (!shouldUseRapidClick) {
         onClick?.(event);
         return;
       }
@@ -108,7 +110,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       <Comp
         className={cn(buttonVariants({ variant, size, className }))}
         ref={ref}
-        disabled={disabled || (preventRapidClick && clickLocked)}
+        disabled={disabled || (shouldUseRapidClick && clickLocked)}
         onClick={handleClick}
         {...props}
       />
