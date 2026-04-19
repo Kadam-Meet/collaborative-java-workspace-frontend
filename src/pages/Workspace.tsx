@@ -67,7 +67,6 @@ import {
 import type { ActivityFilters, CommentEntry, FileLockEntry, PendingInvitationSummary, RoomActivity, RoomFile, RoomMember, RoomSearchResults, RoomSummary, SoloWorkspaceSummary, VersionCompareResult, VersionEntry } from "@/types/workspace.types";
 import { useAuth } from "@/hooks/useAuth";
 import { buildDraftStorageKey, isDraftNewerThanServer, loadDraftSnapshot, saveDraftSnapshot } from "@/utils/draftStorage";
-import { formatSystemDateTime } from "@/utils/formatDate";
 import type { RoomRealtimeEvent } from "@/services/socketService";
 
 type RemoteSelectionState = {
@@ -2059,7 +2058,7 @@ const Workspace = () => {
                         <p className="text-xs font-semibold text-foreground">{event.title}</p>
                         <p className="text-[11px] text-muted-foreground mt-1">{event.description}</p>
                         <p className="text-[10px] text-muted-foreground mt-1">
-                          {(event.actorName || event.actorEmail || "Unknown") + " • " + formatSystemDateTime(event.createdAt)}
+                          {(event.actorName || event.actorEmail || "Unknown") + " • " + new Date(event.createdAt).toLocaleString()}
                         </p>
                       </div>
                     ))}
