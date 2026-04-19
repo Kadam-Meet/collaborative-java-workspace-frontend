@@ -12,18 +12,21 @@ interface VersionHistoryProps {
 	canDelete?: boolean;
 }
 
+
 const VersionHistory = ({ versions, onRevert, onDelete, onCompare, loading = false, canRevert = false, canDelete = false }: VersionHistoryProps) => {
+	const visibleVersions = versions.slice(0, 5);
+
 	if (loading) {
 		return <p className="text-[11px] text-muted-foreground">Loading version history...</p>;
 	}
 
-	if (versions.length === 0) {
+	if (visibleVersions.length === 0) {
 		return <p className="text-[11px] text-muted-foreground">No versions yet</p>;
 	}
 
 	return (
 		<div className="space-y-2">
-			{versions.map((version) => (
+			{visibleVersions.map((version) => (
 				<div key={version.id} className="bg-surface rounded-md p-2 group">
 					<div className="flex items-center justify-between mb-1">
 						<div className="flex items-center gap-1">

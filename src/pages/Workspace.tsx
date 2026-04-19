@@ -30,6 +30,7 @@ import {
   deleteRoom,
   deleteRoomFile,
   deleteSoloWorkspace,
+  deleteSoloVersion,
   downloadRoomFile,
   getFileComments,
   getFileVersions,
@@ -39,7 +40,9 @@ import {
   getRoomActivity,
   getRoomFile,
   getRoomFiles,
-  getLatestSoloWorkspace,
+  getSoloFileVersions,
+  getSoloWorkspaces,
+  getSoloVersionDetail,
   getVersionDetail,
   getRoomMembers,
   joinRoom,
@@ -47,18 +50,20 @@ import {
   getSoloWorkspace,
   replyToComment,
   revertFileVersion,
+  revertSoloVersion,
   resolveComment,
   publishRoomPresence,
   releaseFileLock,
   revokeInvitation,
   saveRoomFile,
   saveVersionSnapshot,
+  saveSoloVersionSnapshot,
   searchRoom,
   updateSoloWorkspace,
   updateRoomMemberPermissions,
   uploadRoomJavaFile,
 } from "@/api/workspaceApi";
-import type { ActivityFilters, CommentEntry, FileLockEntry, PendingInvitationSummary, RoomActivity, RoomFile, RoomMember, RoomSearchResults, RoomSummary, VersionCompareResult, VersionEntry } from "@/types/workspace.types";
+import type { ActivityFilters, CommentEntry, FileLockEntry, PendingInvitationSummary, RoomActivity, RoomFile, RoomMember, RoomSearchResults, RoomSummary, SoloWorkspaceSummary, VersionCompareResult, VersionEntry } from "@/types/workspace.types";
 import { useAuth } from "@/hooks/useAuth";
 import { buildDraftStorageKey, isDraftNewerThanServer, loadDraftSnapshot, saveDraftSnapshot } from "@/utils/draftStorage";
 import type { RoomRealtimeEvent } from "@/services/socketService";
@@ -195,6 +200,64 @@ const Workspace = () => {
     return { content: draft.content, restored: true };
   }, [user.email]);
 
+  const mapSoloWorkspacesToFiles = useCallback((workspaces: SoloWorkspaceSummary[]): RoomFile[] => {
+    return workspaces.map((workspace) => ({
+      id: workspace.id,
+      filePath: workspace.fileName,
+      language: "java",
+      updatedAt: workspace.updatedAt,
+      updatedByEmail: user.email,
+    }));
+  }, [user.email]);
+
+  const loadSoloWorkspaceTree = useCallback(async (preferredId?: number | null) => {
+    const workspaces = await getSoloWorkspaces();
+    const nextFiles = mapSoloWorkspacesToFiles(workspaces);
+    setRoomFiles(nextFiles);
+
+    if (workspaces.length === 0) {
+      return null;
+    }
+
+    const nextId = preferredId && workspaces.some((workspace) => workspace.id === preferredId)
+      ? preferredId
+      : (workspaces[0]?.id ?? null);
+
+    if (!nextId) {
+      return null;
+    }
+
+    return workspaces.find((workspace) => workspace.id === nextId) ?? null;
+  }, [mapSoloWorkspacesToFiles]);
+
+  const openSoloWorkspace = useCallback(async (workspaceId: number) => {
+    const workspace = await getSoloWorkspace(workspaceId);
+    const resolved = resolveDraftContent({
+      content: workspace.content || "",
+      fileName: workspace.fileName,
+      serverUpdatedAt: workspace.updatedAt,
+      fileNumericId: workspace.id,
+      standalone: true,
+    });
+
+    setSoloWorkspaceId(workspace.id);
+    setActiveFileId(workspace.id);
+    setActiveFileUpdatedAt(workspace.updatedAt);
+    setActiveFileName(workspace.fileName);
+    setRenameDraft(workspace.fileName);
+    setCode(resolved.content);
+    lastSyncedCodeRef.current = workspace.content || "";
+    lastSyncedNameRef.current = workspace.fileName;
+    void getSoloFileVersions(workspace.id).then(setVersions).catch(() => undefined);
+    setComments([]);
+    setLoadingVersions(false);
+    const routeValue = String(workspace.id);
+    if (searchParams.get("soloId") !== routeValue) {
+      setSearchParams({ soloId: routeValue }, { replace: true });
+    }
+    return workspace;
+  }, [resolveDraftContent, searchParams, setSearchParams, user.email]);
+
   const loadRoomContext = async (codeValue: string) => {
     setLoadingRoom(true);
     try {
@@ -219,7 +282,7 @@ const Workspace = () => {
 
       if (files.length > 0) {
         const firstFile = await getRoomFile(roomDetails.id, files[0].id);
-        const history = await getFileVersions(roomDetails.id, files[0].id);
+        const history = (await getFileVersions(roomDetails.id, files[0].id)).slice(0, 5);
         const resolved = resolveDraftContent({
           content: firstFile.content || "",
           fileName: firstFile.filePath,
@@ -256,8 +319,6 @@ const Workspace = () => {
     }
 
     if (!roomId) {
-      const soloWorkspaceIdParam = searchParams.get("soloId");
-
       const resetStandaloneState = (nextCode = EMPTY_JAVA_CODE, nextName = "Untitled.java", nextId: number | null = null) => {
         setSoloWorkspaceId(nextId);
         setRoom(null);
@@ -284,21 +345,37 @@ const Workspace = () => {
 
       const loadStandaloneWorkspace = async () => {
         try {
-          if (soloWorkspaceIdParam) {
-            const workspace = await getSoloWorkspace(Number(soloWorkspaceIdParam));
-            resetStandaloneState(workspace.content || "", workspace.fileName, workspace.id);
-            setLoadingRoom(false);
+          const soloWorkspaceIdParam = searchParams.get("soloId");
+          const preferredId = soloWorkspaceIdParam ? Number(soloWorkspaceIdParam) : null;
+          const treeWorkspace = await loadSoloWorkspaceTree(preferredId);
+
+          if (!treeWorkspace) {
+            resetStandaloneState();
             return;
           }
 
-          try {
-            const latest = await getLatestSoloWorkspace();
-            resetStandaloneState(latest.content || "", latest.fileName, latest.id);
-            setSearchParams({ soloId: String(latest.id) }, { replace: true });
-            setLoadingRoom(false);
-            return;
-          } catch {
-            resetStandaloneState();
+          const workspace = await getSoloWorkspace(treeWorkspace.id);
+
+          const resolved = resolveDraftContent({
+            content: workspace.content || "",
+            fileName: workspace.fileName,
+            serverUpdatedAt: workspace.updatedAt,
+            fileNumericId: workspace.id,
+            standalone: true,
+          });
+
+          setSoloWorkspaceId(workspace.id);
+          setActiveFileId(workspace.id);
+          setActiveFileUpdatedAt(workspace.updatedAt);
+          setActiveFileName(workspace.fileName);
+          setRenameDraft(workspace.fileName);
+          setCode(resolved.content);
+          lastSyncedCodeRef.current = workspace.content || "";
+          lastSyncedNameRef.current = workspace.fileName;
+          void getSoloFileVersions(workspace.id).then(setVersions).catch(() => undefined);
+          setComments([]);
+          if (searchParams.get("soloId") !== String(workspace.id)) {
+            setSearchParams({ soloId: String(workspace.id) }, { replace: true });
           }
         } catch (error) {
           toast.error(getUserFriendlyErrorMessage(error, "Unable to load solo workspace"));
@@ -443,6 +520,9 @@ const Workspace = () => {
 
     setActiveFileName(normalizedName);
     setRenameDraft(normalizedName);
+    if (soloWorkspaceId) {
+      await loadSoloWorkspaceTree(soloWorkspaceId);
+    }
     toast.success(`Renamed to ${normalizedName}`);
   };
 
@@ -471,7 +551,7 @@ const Workspace = () => {
           });
           setCode(resolved.content);
           lastSyncedCodeRef.current = uploaded.content || "";
-          const history = await getFileVersions(room.id, uploaded.id);
+          const history = (await getFileVersions(room.id, uploaded.id)).slice(0, 5);
           setVersions(history);
           const activity = await getRoomActivity(room.id);
           setRoomActivity(activity);
@@ -507,7 +587,7 @@ const Workspace = () => {
       try {
         await saveVersionSnapshot(room.id, activeFileId, code);
         const files = await getRoomFiles(room.id);
-        const history = await getFileVersions(room.id, activeFileId);
+        const history = (await getFileVersions(room.id, activeFileId)).slice(0, 5);
         setRoomFiles(files);
         setVersions(history);
         const activity = await getRoomActivity(room.id);
@@ -520,11 +600,49 @@ const Workspace = () => {
       }
     }
 
+    if (isStandalone && activeFileId) {
+      await saveSoloVersionSnapshot(activeFileId, {
+        fileName: activeFileName,
+        content: code,
+      });
+      setVersions(await getSoloFileVersions(activeFileId));
+      toast.success("Version saved");
+      return;
+    }
+
     toast.success("Version saved!");
   };
 
   const handleSelectFile = async (fileId: number) => {
     if (!room) {
+      try {
+        setLoadingVersions(true);
+        const workspace = await getSoloWorkspace(fileId);
+        const resolved = resolveDraftContent({
+          content: workspace.content || "",
+          fileName: workspace.fileName,
+          serverUpdatedAt: workspace.updatedAt,
+          fileNumericId: workspace.id,
+          standalone: true,
+        });
+        setSoloWorkspaceId(workspace.id);
+        setActiveFileId(workspace.id);
+        setActiveFileUpdatedAt(workspace.updatedAt);
+        setActiveFileName(workspace.fileName);
+        setRenameDraft(workspace.fileName);
+        setCode(resolved.content);
+        lastSyncedCodeRef.current = workspace.content || "";
+        lastSyncedNameRef.current = workspace.fileName;
+        setVersions(await getSoloFileVersions(workspace.id));
+        setComments([]);
+        if (searchParams.get("soloId") !== String(workspace.id)) {
+          setSearchParams({ soloId: String(workspace.id) }, { replace: true });
+        }
+      } catch (error) {
+        toast.error(getUserFriendlyErrorMessage(error, "Unable to open file"));
+      } finally {
+        setLoadingVersions(false);
+      }
       return;
     }
 
@@ -551,7 +669,7 @@ const Workspace = () => {
       setActiveFileName(file.filePath);
       setCode(resolved.content);
       lastSyncedCodeRef.current = file.content || "";
-      setVersions(history);
+      setVersions(history.slice(0, 5));
       setComments(fileComments);
       await acquireFileLock(room.id, file.id).catch(() => undefined);
       const refreshedLocks = await listFileLocks(room.id);
@@ -578,8 +696,23 @@ const Workspace = () => {
   };
 
   const handleCreateFile = async (filePath: string) => {
-    if (isStandalone || !room) {
-      toast.info("Create file is available inside a room");
+    if (isStandalone) {
+      try {
+        const created = await createSoloWorkspace({
+          fileName: filePath,
+          content: "",
+        });
+        const workspace = await openSoloWorkspace(created.id);
+        await loadSoloWorkspaceTree(workspace?.id ?? created.id);
+        setVersions(await getSoloFileVersions(created.id));
+        toast.success(`Created ${created.fileName}`);
+      } catch (error) {
+        toast.error(getUserFriendlyErrorMessage(error, "Unable to create file"));
+      }
+      return;
+    }
+
+    if (!room) {
       return;
     }
 
@@ -683,7 +816,28 @@ const Workspace = () => {
   };
 
   const handleRevertVersion = async (versionId: number) => {
-    if (!room || !activeFileId) {
+    if (!activeFileId) {
+      return;
+    }
+
+    if (isStandalone) {
+      try {
+        const reverted = await revertSoloVersion(activeFileId, versionId);
+        const refreshed = await getSoloWorkspace(activeFileId);
+        setCode(reverted.content || "");
+        lastSyncedCodeRef.current = reverted.content || "";
+        setActiveFileUpdatedAt(reverted.updatedAt);
+        setActiveFileName(reverted.filePath || refreshed.fileName);
+        setRenameDraft(reverted.filePath || refreshed.fileName);
+        setVersions(await getSoloFileVersions(activeFileId));
+        toast.success(`Reverted to v${reverted.revertedFromVersion}`);
+      } catch (error) {
+        toast.error(getUserFriendlyErrorMessage(error, "Unable to revert version"));
+      }
+      return;
+    }
+
+    if (!room) {
       return;
     }
 
@@ -692,7 +846,7 @@ const Workspace = () => {
       setCode(reverted.content || "");
       lastSyncedCodeRef.current = reverted.content || "";
       const files = await getRoomFiles(room.id);
-      const history = await getFileVersions(room.id, activeFileId);
+      const history = (await getFileVersions(room.id, activeFileId)).slice(0, 5);
       setRoomFiles(files);
       setVersions(history);
       const activity = await getRoomActivity(room.id);
@@ -728,7 +882,7 @@ const Workspace = () => {
   };
 
   const handleDeleteVersion = async (versionId: number) => {
-    if (!room || !activeFileId) {
+    if (!activeFileId) {
       return;
     }
 
@@ -737,9 +891,20 @@ const Workspace = () => {
       return;
     }
 
+    if (isStandalone) {
+      await deleteSoloVersion(activeFileId, versionId);
+      setVersions(await getSoloFileVersions(activeFileId));
+      toast.success("Version deleted");
+      return;
+    }
+
+    if (!room) {
+      return;
+    }
+
     try {
       await deleteFileVersion(room.id, activeFileId, versionId);
-      const history = await getFileVersions(room.id, activeFileId);
+      const history = (await getFileVersions(room.id, activeFileId)).slice(0, 5);
       setVersions(history);
       const activity = await getRoomActivity(room.id);
       setRoomActivity(activity);
@@ -791,6 +956,38 @@ const Workspace = () => {
   };
 
   const handleDeleteRoomFile = async (fileId: number) => {
+    if (isStandalone) {
+      const file = roomFiles.find((entry) => entry.id === fileId);
+      const confirmed = window.confirm(`Delete file ${file?.filePath || fileId}?`);
+      if (!confirmed) {
+        return;
+      }
+
+      try {
+        await deleteSoloWorkspace(fileId);
+        const nextWorkspace = await loadSoloWorkspaceTree(activeFileId === fileId ? null : activeFileId);
+        if (activeFileId === fileId) {
+          if (nextWorkspace) {
+            await openSoloWorkspace(nextWorkspace.id);
+          } else {
+            setSoloWorkspaceId(null);
+            setActiveFileId(null);
+            setActiveFileUpdatedAt(null);
+            setActiveFileName("Untitled.java");
+            setRenameDraft("Untitled.java");
+            setCode(EMPTY_JAVA_CODE);
+            lastSyncedCodeRef.current = EMPTY_JAVA_CODE;
+            setVersions([]);
+            setComments([]);
+          }
+        }
+        toast.success(`Deleted ${file?.filePath || "file"}`);
+      } catch (error) {
+        toast.error(getUserFriendlyErrorMessage(error, "Unable to delete file"));
+      }
+      return;
+    }
+
     if (!room) {
       return;
     }
@@ -814,6 +1011,39 @@ const Workspace = () => {
   };
 
   const handleDeleteRoomFolder = async (folderPath: string) => {
+    if (isStandalone) {
+      const confirmed = window.confirm(`Delete folder ${folderPath} and all files inside it?`);
+      if (!confirmed) {
+        return;
+      }
+
+      try {
+        const allWorkspaces = await getSoloWorkspaces();
+        const matching = allWorkspaces.filter((workspace) => workspace.fileName === folderPath || workspace.fileName.startsWith(`${folderPath}/`));
+        await Promise.all(matching.map((workspace) => deleteSoloWorkspace(workspace.id)));
+        const nextWorkspace = await loadSoloWorkspaceTree(activeFileName === folderPath || activeFileName.startsWith(`${folderPath}/`) ? null : activeFileId);
+        if (activeFileName === folderPath || activeFileName.startsWith(`${folderPath}/`)) {
+          if (nextWorkspace) {
+            await openSoloWorkspace(nextWorkspace.id);
+          } else {
+            setSoloWorkspaceId(null);
+            setActiveFileId(null);
+            setActiveFileUpdatedAt(null);
+            setActiveFileName("Untitled.java");
+            setRenameDraft("Untitled.java");
+            setCode(EMPTY_JAVA_CODE);
+            lastSyncedCodeRef.current = EMPTY_JAVA_CODE;
+            setVersions([]);
+            setComments([]);
+          }
+        }
+        toast.success(`Deleted folder ${folderPath}`);
+      } catch (error) {
+        toast.error(getUserFriendlyErrorMessage(error, "Unable to delete folder"));
+      }
+      return;
+    }
+
     if (!room) {
       return;
     }
@@ -870,7 +1100,32 @@ const Workspace = () => {
   };
 
   const handleCompareVersion = async (versionId: number) => {
-    if (!room || !activeFileId) {
+    if (!activeFileId) {
+      return;
+    }
+
+    if (isStandalone) {
+      const snapshot = await getSoloVersionDetail(activeFileId, versionId);
+      if (!snapshot) {
+        toast.error("Unable to load comparison data");
+        return;
+      }
+
+      setVersionComparison({
+        fileId: activeFileId,
+        filePath: snapshot.filePath || activeFileName,
+        fromVersionId: versionId,
+        toVersionId: activeFileId,
+        fromLabel: `v${snapshot.versionNumber}`,
+        toLabel: "current",
+        fromContent: snapshot.content || "",
+        toContent: codeRef.current,
+      });
+      toast.info("Loaded comparison for selected version");
+      return;
+    }
+
+    if (!room) {
       return;
     }
 
@@ -1084,7 +1339,7 @@ const Workspace = () => {
           setRoomFiles(files);
           setRoomActivity(activity);
           if (activeFileId) {
-            const history = await getFileVersions(room.id, activeFileId);
+            const history = (await getFileVersions(room.id, activeFileId)).slice(0, 5);
             setVersions(history);
           }
         } catch {
@@ -1300,10 +1555,11 @@ const Workspace = () => {
     lastSyncedNameRef.current = saved.fileName;
     setRenameDraft(saved.fileName);
     setLocalDraftSavedAt(new Date());
+    await loadSoloWorkspaceTree(saved.id);
     if (searchParams.get("soloId") !== String(saved.id)) {
       setSearchParams({ soloId: String(saved.id) }, { replace: true });
     }
-  }, [isStandalone, shouldPersistSoloWorkspace, activeFileName, code, soloWorkspaceId, searchParams, setSearchParams]);
+  }, [isStandalone, shouldPersistSoloWorkspace, activeFileName, code, soloWorkspaceId, loadSoloWorkspaceTree, searchParams, setSearchParams]);
 
   const handleManualSave = useCallback(async () => {
     setSavingWorkspace(true);
@@ -1325,6 +1581,7 @@ const Workspace = () => {
         lastSyncedNameRef.current = saved.fileName;
         setRenameDraft(saved.fileName);
         setLocalDraftSavedAt(new Date());
+        await loadSoloWorkspaceTree(saved.id);
         if (searchParams.get("soloId") !== String(saved.id)) {
           setSearchParams({ soloId: String(saved.id) }, { replace: true });
         }
@@ -1344,6 +1601,7 @@ const Workspace = () => {
     activeFileName,
     code,
     soloWorkspaceId,
+    loadSoloWorkspaceTree,
     searchParams,
     setSearchParams,
     performRemoteAutoSave,

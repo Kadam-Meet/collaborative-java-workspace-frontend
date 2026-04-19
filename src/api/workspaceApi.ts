@@ -102,6 +102,29 @@ export function deleteSoloWorkspace(soloWorkspaceId: number): Promise<void> {
   return workspaceRequest<void>(`/api/workspaces/solo/${soloWorkspaceId}`, "DELETE");
 }
 
+export function saveSoloVersionSnapshot(
+  soloWorkspaceId: number,
+  payload: SoloWorkspaceRequestPayload
+): Promise<VersionEntry> {
+  return workspaceRequest<VersionEntry>(`/api/workspaces/solo/${soloWorkspaceId}/versions`, "POST", payload);
+}
+
+export function getSoloFileVersions(soloWorkspaceId: number): Promise<VersionEntry[]> {
+  return workspaceRequest<VersionEntry[]>(`/api/workspaces/solo/${soloWorkspaceId}/versions`, "GET");
+}
+
+export function getSoloVersionDetail(soloWorkspaceId: number, versionId: number): Promise<VersionEntry> {
+  return workspaceRequest<VersionEntry>(`/api/workspaces/solo/${soloWorkspaceId}/versions/${versionId}`, "GET");
+}
+
+export function revertSoloVersion(soloWorkspaceId: number, versionId: number): Promise<VersionRevertResult> {
+  return workspaceRequest<VersionRevertResult>(`/api/workspaces/solo/${soloWorkspaceId}/versions/${versionId}/revert`, "POST");
+}
+
+export function deleteSoloVersion(soloWorkspaceId: number, versionId: number): Promise<VersionDeleteResult> {
+  return workspaceRequest<VersionDeleteResult>(`/api/workspaces/solo/${soloWorkspaceId}/versions/${versionId}`, "DELETE");
+}
+
 export function getMyRooms(): Promise<RoomSummary[]> {
   return workspaceRequest<RoomSummary[]>("/api/workspaces/rooms", "GET");
 }
