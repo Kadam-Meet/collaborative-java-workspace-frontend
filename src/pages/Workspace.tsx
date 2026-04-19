@@ -1253,6 +1253,7 @@ const Workspace = () => {
     user.email.trim().toLowerCase() === String(room.ownerEmail ?? "").trim().toLowerCase()
   );
   const currentUserMembership = roomMembers.find((member) => member.email.toLowerCase() === user.email.toLowerCase());
+  const canEditFiles = isStandalone || canManageMembers || Boolean(currentUserMembership?.canEditFiles);
   const canSaveVersions = isStandalone || canManageMembers || Boolean(currentUserMembership?.canSaveVersions);
   const canRevertVersions = isStandalone || canManageMembers || Boolean(currentUserMembership?.canRevertVersions);
   const visibleMembers = isStandalone
@@ -1735,6 +1736,9 @@ const Workspace = () => {
             </div>
           )}
           <input ref={fileInputRef} type="file" accept=".java" onChange={handleUpload} className="hidden" />
+          <Button variant="ghost" size="sm" className="h-7 text-xs gap-1" onClick={() => navigate("/dashboard")}>
+            Dashboard
+          </Button>
           <Button variant="ghost" size="sm" className="h-7 text-xs gap-1" onClick={() => fileInputRef.current?.click()}>
             <Upload className="h-3 w-3" /> Upload
           </Button>
@@ -1773,6 +1777,7 @@ const Workspace = () => {
           activeFileId={activeFileId}
           activeFilePath={activeFileName}
           canManageMembers={canManageMembers}
+          canEditFiles={canEditFiles}
           canSaveVersions={canSaveVersions}
           canRevertVersions={canRevertVersions}
           onDeleteRoom={handleDeleteRoomWorkspace}

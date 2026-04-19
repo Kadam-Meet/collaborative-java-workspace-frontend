@@ -119,8 +119,14 @@ const Invitation = () => {
               </div>
 
               {!preview.valid ? (
-                <p className="text-xs text-muted-foreground">
-                  {preview.accepted ? "This invitation is already accepted." : "This invitation has expired."}
+                <p className="text-xs text-muted-foreground bg-amber-500/10 text-amber-700 dark:text-amber-400 rounded p-2">
+                  {preview.accepted
+                    ? "This invitation is already accepted."
+                    : preview.revoked
+                    ? "This invitation has been revoked by the room owner."
+                    : preview.declined
+                    ? "This invitation has already been declined."
+                    : "This invitation has expired."}
                 </p>
               ) : (
                 <div className="space-y-2">

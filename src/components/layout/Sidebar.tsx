@@ -25,6 +25,7 @@ interface SidebarProps {
   activeFileId?: number | null;
   activeFilePath?: string;
   canManageMembers: boolean;
+  canEditFiles: boolean;
   canSaveVersions: boolean;
   canRevertVersions: boolean;
   onDeleteRoom: () => Promise<void>;
@@ -65,6 +66,7 @@ const Sidebar = ({
   activeFileId,
   activeFilePath,
   canManageMembers,
+  canEditFiles,
   canSaveVersions,
   canRevertVersions,
   onDeleteRoom,
@@ -471,7 +473,7 @@ const Sidebar = ({
                     {isExpanded ? <FolderOpen className="h-3 w-3" /> : <Folder className="h-3 w-3" />}
                     <span className="truncate">{getDisplayFolderName(folder)}</span>
                   </button>
-                  {canManageMembers && folder !== "" && (
+                  {(canManageMembers || canEditFiles) && folder !== "" && (
                     <button
                       type="button"
                       className="rounded p-1 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
@@ -511,7 +513,7 @@ const Sidebar = ({
                             {lockedByOther ? `locked:${lock.lockedByName}` : "locked"}
                           </span>
                         ) : null}
-                        {canManageMembers && (
+                        {canEditFiles && (
                           <button
                             type="button"
                             className="rounded p-1 text-muted-foreground hover:text-destructive hover:bg-destructive/10"

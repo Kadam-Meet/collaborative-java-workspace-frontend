@@ -190,6 +190,8 @@ export interface InvitationPreviewResponse {
   valid: boolean;
   expired: boolean;
   accepted: boolean;
+  revoked: boolean;
+  declined: boolean;
   inviteeEmail: string;
   inviterEmail?: string | null;
   roomCode: string;
