@@ -28,41 +28,46 @@ const VersionHistory = ({ versions, onRevert, onDelete, onCompare, loading = fal
 		<div className="space-y-2">
 			{visibleVersions.map((version) => (
 				<div key={version.id} className="bg-surface rounded-md p-2 group">
-					<div className="flex items-center justify-between mb-1">
-						<div className="flex items-center gap-1">
-							<GitBranch className="h-3 w-3 text-primary" />
-							<span className="text-xs font-semibold text-foreground">v{version.versionNumber}</span>
+					<div className="flex items-center justify-between gap-2 mb-1 min-w-0">
+						<div className="flex items-center gap-1 min-w-0">
+							<GitBranch className="h-3 w-3 text-primary flex-shrink-0" />
+							<span className="text-xs font-semibold text-foreground flex-shrink-0">v{version.versionNumber}</span>
+							{version.versionLabel && (
+								<span className="text-xs text-muted-foreground truncate">({version.versionLabel})</span>
+							)}
 						</div>
-						{canRevert && (
-							<Button
-								variant="ghost"
-								size="sm"
-								className="h-5 px-1.5 text-[10px] opacity-0 group-hover:opacity-100 transition-opacity"
-								onClick={() => void onRevert(version.id)}
-							>
-								<RotateCcw className="h-2.5 w-2.5 mr-0.5" /> Revert
-							</Button>
-						)}
-						{canDelete && (
-							<Button
-								variant="ghost"
-								size="sm"
-								className="h-5 px-1.5 text-[10px] opacity-0 group-hover:opacity-100 transition-opacity"
-								onClick={() => void onDelete(version.id)}
-							>
-								<Trash2 className="h-2.5 w-2.5 mr-0.5" /> Delete
-							</Button>
-						)}
-						{onCompare && (
-							<Button
-								variant="ghost"
-								size="sm"
-								className="h-5 px-1.5 text-[10px] opacity-0 group-hover:opacity-100 transition-opacity"
-								onClick={() => void onCompare(version.id)}
-							>
-								Compare
-							</Button>
-						)}
+						<div className="flex items-center gap-0.5 flex-shrink-0">
+							{canRevert && (
+								<Button
+									variant="ghost"
+									size="sm"
+									className="h-5 px-1.5 text-[10px] opacity-0 group-hover:opacity-100 transition-opacity"
+									onClick={() => void onRevert(version.id)}
+								>
+									<RotateCcw className="h-2.5 w-2.5 mr-0.5" /> Revert
+								</Button>
+							)}
+							{canDelete && (
+								<Button
+									variant="ghost"
+									size="sm"
+									className="h-5 px-1.5 text-[10px] opacity-0 group-hover:opacity-100 transition-opacity"
+									onClick={() => void onDelete(version.id)}
+								>
+									<Trash2 className="h-2.5 w-2.5 mr-0.5" /> Delete
+								</Button>
+							)}
+							{onCompare && (
+								<Button
+									variant="ghost"
+									size="sm"
+									className="h-5 px-1.5 text-[10px] opacity-0 group-hover:opacity-100 transition-opacity"
+									onClick={() => void onCompare(version.id)}
+								>
+									Compare
+								</Button>
+							)}
+						</div>
 					</div>
 					<p className="text-[11px] text-muted-foreground truncate">{version.contentPreview || "(empty snapshot)"}</p>
 					<p className="text-[10px] text-muted-foreground mt-0.5">

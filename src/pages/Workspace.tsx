@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Download, Upload, Zap, Hash, Users, Save } from "lucide-react";
 import { toast } from "sonner";
 import { analyzeJavaWorkspace } from "@/api/analysisApi";
@@ -139,6 +140,8 @@ const Workspace = () => {
   const [activityFilters, setActivityFilters] = useState<ActivityFilters>({});
   const [deletingSoloWorkspace, setDeletingSoloWorkspace] = useState(false);
   const [savingWorkspace, setSavingWorkspace] = useState(false);
+  const [showVersionLabelDialog, setShowVersionLabelDialog] = useState(false);
+  const [versionLabelDraft, setVersionLabelDraft] = useState("");
 
   useEffect(() => {
     codeRef.current = code;
@@ -601,16 +604,32 @@ const Workspace = () => {
     }
 
     if (isStandalone && activeFileId) {
-      await saveSoloVersionSnapshot(activeFileId, {
-        fileName: activeFileName,
-        content: code,
-      });
-      setVersions(await getSoloFileVersions(activeFileId));
-      toast.success("Version saved");
+      setVersionLabelDraft("");
+      setShowVersionLabelDialog(true);
       return;
     }
 
     toast.success("Version saved!");
+  };
+
+  const handleSaveVersionWithLabel = async () => {
+    if (!isStandalone || !activeFileId) {
+      return;
+    }
+
+    try {
+      await saveSoloVersionSnapshot(activeFileId, {
+        fileName: activeFileName,
+        content: code,
+        versionLabel: versionLabelDraft.trim() || undefined,
+      });
+      setVersions(await getSoloFileVersions(activeFileId));
+      toast.success("Version saved");
+      setShowVersionLabelDialog(false);
+      setVersionLabelDraft("");
+    } catch (error) {
+      toast.error(getUserFriendlyErrorMessage(error, "Unable to save version"));
+    }
   };
 
   const handleSelectFile = async (fileId: number) => {
@@ -1953,6 +1972,49 @@ const Workspace = () => {
           )}
         </div>
       </div>
+
+      {/* Version Label Dialog */}
+      <Dialog open={showVersionLabelDialog} onOpenChange={setShowVersionLabelDialog}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle>Save Version</DialogTitle>
+            <DialogDescription>
+              Give this version a name to remember what it was about
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <Input
+              placeholder="e.g., Fixed bug in calculateSum(), Added logging"
+              value={versionLabelDraft}
+              onChange={(e) => setVersionLabelDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  void handleSaveVersionWithLabel();
+                }
+              }}
+              className="h-9 text-sm"
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowVersionLabelDialog(false);
+                setVersionLabelDraft("");
+              }}
+              className="h-8 text-xs"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => void handleSaveVersionWithLabel()}
+              className="h-8 text-xs"
+            >
+              Save Version
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

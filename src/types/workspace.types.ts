@@ -55,6 +55,7 @@ export interface VersionEntry {
   message?: string;
   filePath?: string | null;
   content?: string;
+  versionLabel?: string | null;
 }
 
 export interface VersionRevertResult {

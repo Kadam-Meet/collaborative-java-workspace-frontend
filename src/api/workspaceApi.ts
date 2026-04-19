@@ -48,6 +48,7 @@ interface WorkspaceRequestPayload {
 interface SoloWorkspaceRequestPayload {
   fileName: string;
   content: string;
+  versionLabel?: string;
 }
 
 async function workspaceRequest<T>(
