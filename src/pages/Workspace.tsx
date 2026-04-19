@@ -6,7 +6,6 @@ import EditorPanel from "@/components/workspace/EditorPanel";
 import AnalysisPanel from "@/components/workspace/AnalysisPanel";
 import IssuesPanel from "@/components/workspace/IssuesPanel";
 import LearningPanel from "@/components/workspace/LearningPanel";
-import { analysisResults, defaultJavaCode, issuesList } from "@/data/mockData";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -65,15 +64,26 @@ type RemoteSelectionState = {
   updatedAt: number;
 };
 
+const EMPTY_JAVA_CODE = "";
+const EMPTY_ANALYSIS: WorkspaceAnalysis = {
+  cyclomaticComplexity: 0,
+  maxComplexity: 1,
+  timeComplexity: "N/A",
+  performanceScore: 0,
+  riskLevel: "Low",
+  linesOfCode: 0,
+  methodCount: 0,
+};
+
 const Workspace = () => {
   const { user, token, loading: authLoading, isAuthenticated } = useAuth();
   const navigate = useNavigate();
   const { roomId } = useParams();
   const isStandalone = !roomId;
-  const [code, setCode] = useState(defaultJavaCode);
+  const [code, setCode] = useState(EMPTY_JAVA_CODE);
   const [analyzing, setAnalyzing] = useState(false);
-  const [analysis, setAnalysis] = useState<WorkspaceAnalysis>(analysisResults as WorkspaceAnalysis);
-  const [issues, setIssues] = useState<WorkspaceIssue[]>(issuesList as WorkspaceIssue[]);
+  const [analysis, setAnalysis] = useState<WorkspaceAnalysis>(EMPTY_ANALYSIS);
+  const [issues, setIssues] = useState<WorkspaceIssue[]>([]);
   const [backendAvailable, setBackendAvailable] = useState(true);
   const [room, setRoom] = useState<RoomSummary | null>(null);
   const [roomMembers, setRoomMembers] = useState<RoomMember[]>([]);
@@ -84,7 +94,7 @@ const Workspace = () => {
   const [loadingVersions, setLoadingVersions] = useState(false);
   const [activeFileId, setActiveFileId] = useState<number | null>(null);
   const [activeFileUpdatedAt, setActiveFileUpdatedAt] = useState<string | null>(null);
-  const [activeFileName, setActiveFileName] = useState("DataProcessor.java");
+  const [activeFileName, setActiveFileName] = useState("Untitled.java");
   const [loadingRoom, setLoadingRoom] = useState(true);
   const [localDraftSavedAt, setLocalDraftSavedAt] = useState<Date | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -200,9 +210,9 @@ const Workspace = () => {
       } else {
         setActiveFileId(null);
         setActiveFileUpdatedAt(null);
-        setActiveFileName("DataProcessor.java");
-        setCode(defaultJavaCode);
-        lastSyncedCodeRef.current = defaultJavaCode;
+        setActiveFileName("Untitled.java");
+        setCode(EMPTY_JAVA_CODE);
+        lastSyncedCodeRef.current = EMPTY_JAVA_CODE;
         setVersions([]);
       }
     } catch (error) {
@@ -220,8 +230,8 @@ const Workspace = () => {
 
     if (!roomId) {
       const restored = resolveDraftContent({
-        content: defaultJavaCode,
-        fileName: "DataProcessor.java",
+        content: EMPTY_JAVA_CODE,
+        fileName: "Untitled.java",
         standalone: true,
       });
       setLoadingRoom(false);
@@ -237,7 +247,7 @@ const Workspace = () => {
       setSearchResults(null);
       setActiveFileId(null);
       setActiveFileUpdatedAt(null);
-      setActiveFileName("DataProcessor.java");
+      setActiveFileName("Untitled.java");
       setCode(restored.content);
       lastSyncedCodeRef.current = restored.content;
       return;
@@ -246,6 +256,11 @@ const Workspace = () => {
   }, [authLoading, isAuthenticated, token, roomId, resolveDraftContent]);
 
   const handleAnalyze = async () => {
+    if (!code.trim()) {
+      toast.info("Add Java code first to run analysis");
+      return;
+    }
+
     const requestId = ++analysisRequestSeq.current;
     setAnalyzing(true);
     toast.info("Queued backend analysis...");
@@ -274,6 +289,13 @@ const Workspace = () => {
 
   useEffect(() => {
     if (authLoading || !isAuthenticated || !token) {
+      return;
+    }
+
+    if (!code.trim()) {
+      setAnalysis(EMPTY_ANALYSIS);
+      setIssues([]);
+      setBackendAvailable(true);
       return;
     }
 
@@ -321,7 +343,7 @@ const Workspace = () => {
       return;
     }
 
-    triggerDownload(new Blob([code], { type: "text/x-java-source" }), activeFileName || "DataProcessor.java");
+    triggerDownload(new Blob([code], { type: "text/x-java-source" }), activeFileName || "Untitled.java");
     toast.success("File downloaded!");
   };
 
@@ -370,7 +392,7 @@ const Workspace = () => {
       const reader = new FileReader();
       reader.onload = (ev) => {
         setCode(ev.target?.result as string);
-        setActiveFileName(file.name || "DataProcessor.java");
+        setActiveFileName(file.name || "Untitled.java");
         toast.success(`Loaded ${file.name}`);
       };
       reader.readAsText(file);

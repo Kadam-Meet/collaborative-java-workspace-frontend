@@ -4,9 +4,10 @@ import type { DashboardPerformance, DashboardTotals } from "@/types/workspace.ty
 interface DashboardMetricsProps {
   totals: DashboardTotals;
   performance: DashboardPerformance;
+  onMetricClick?: (metricLabel: string) => void;
 }
 
-const DashboardMetrics = ({ totals, performance }: DashboardMetricsProps) => {
+const DashboardMetrics = ({ totals, performance, onMetricClick }: DashboardMetricsProps) => {
   const metrics = [
     { label: "Rooms", value: totals.rooms, icon: FolderKanban, color: "text-primary" },
     { label: "Files", value: totals.files, icon: FileCode2, color: "text-accent" },
@@ -18,13 +19,18 @@ const DashboardMetrics = ({ totals, performance }: DashboardMetricsProps) => {
     <div className="space-y-4">
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {metrics.map((m) => (
-          <div key={m.label} className="stat-card">
+          <button
+            key={m.label}
+            type="button"
+            className="stat-card text-left"
+            onClick={() => onMetricClick?.(m.label)}
+          >
             <div className="flex items-center justify-between mb-2">
               <m.icon className={`h-5 w-5 ${m.color}`} />
             </div>
             <p className="text-2xl font-bold text-foreground">{m.value}</p>
             <p className="text-xs text-muted-foreground mt-1">{m.label}</p>
-          </div>
+          </button>
         ))}
       </div>
 

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import Navbar from "@/components/layout/Navbar";
@@ -12,6 +12,13 @@ import { getDashboardSummary } from "@/api/dashboardApi";
 import type { DashboardSummary, RoomSummary } from "@/types/workspace.types";
 import { getUserFriendlyErrorMessage } from "@/hooks/useToast";
 
+type SoloWorkspaceEntry = {
+  key: string;
+  fileName: string;
+  savedAt: string;
+  preview: string;
+};
+
 const Dashboard = () => {
   const { user, token, loading: authLoading, isAuthenticated } = useAuth();
   const navigate = useNavigate();
@@ -21,6 +28,9 @@ const Dashboard = () => {
   const [newRoomName, setNewRoomName] = useState("");
   const [joinRoomCode, setJoinRoomCode] = useState("");
   const [saving, setSaving] = useState(false);
+  const [soloWorkspaces, setSoloWorkspaces] = useState<SoloWorkspaceEntry[]>([]);
+  const roomsSectionRef = useRef<HTMLElement | null>(null);
+  const filesSectionRef = useRef<HTMLElement | null>(null);
 
   if (!user) return <Navigate to="/login" replace />;
 
@@ -44,6 +54,51 @@ const Dashboard = () => {
 
     void loadRooms();
   }, [authLoading, isAuthenticated, token]);
+
+  useEffect(() => {
+    if (!user) {
+      return;
+    }
+
+    const normalizedEmail = user.email.trim().toLowerCase();
+    const prefix = `java-workspace:draft:${normalizedEmail}:standalone:`;
+    const entries: SoloWorkspaceEntry[] = [];
+
+    for (let index = 0; index < window.localStorage.length; index += 1) {
+      const key = window.localStorage.key(index);
+      if (!key || !key.startsWith(prefix)) {
+        continue;
+      }
+
+      const raw = window.localStorage.getItem(key);
+      if (!raw) {
+        continue;
+      }
+
+      try {
+        const parsed = JSON.parse(raw) as { fileName?: string; savedAt?: string; content?: string };
+        const fileName = (parsed.fileName || key.slice(prefix.length) || "Untitled.java").trim();
+        const savedAt = parsed.savedAt || new Date().toISOString();
+        const firstLine = (parsed.content || "").split("\n").find((line) => line.trim()) || "Unsaved draft";
+        entries.push({
+          key,
+          fileName,
+          savedAt,
+          preview: firstLine.slice(0, 120),
+        });
+      } catch {
+        // Ignore malformed local storage entries.
+      }
+    }
+
+    entries.sort((a, b) => Date.parse(b.savedAt) - Date.parse(a.savedAt));
+    setSoloWorkspaces(entries);
+  }, [user]);
+
+  const scrollToSection = (section: "rooms" | "files") => {
+    const target = section === "rooms" ? roomsSectionRef.current : filesSectionRef.current;
+    target?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
 
   const handleCreateRoom = async () => {
     if (!newRoomName.trim()) {
@@ -156,10 +211,77 @@ const Dashboard = () => {
                 latestRiskLevel: "UNKNOWN",
               }
             }
+            onMetricClick={(metricLabel) => {
+              if (metricLabel === "Rooms") {
+                scrollToSection("rooms");
+              }
+              if (metricLabel === "Files") {
+                scrollToSection("files");
+              }
+            }}
           />
         </div>
 
         <div className="mt-8 animate-slide-up" style={{ animationDelay: "160ms" }}>
+          <h2 className="text-lg font-semibold text-foreground mb-4">Rooms You Are In</h2>
+          <section ref={roomsSectionRef}>
+          <div className="grid sm:grid-cols-2 gap-3">
+            {loadingRooms && <div className="text-sm text-muted-foreground">Loading rooms...</div>}
+            {!loadingRooms && rooms.length === 0 && (
+              <div className="text-sm text-muted-foreground">No rooms yet. Create one to get started.</div>
+            )}
+            {rooms.map((ws) => (
+              <div key={ws.id} className="stat-card flex items-center justify-between">
+                <div className="min-w-0">
+                  <h3 className="text-sm font-semibold text-foreground truncate">{ws.roomName}</h3>
+                  <p className="text-[11px] mt-1">
+                    <span className={`px-1.5 py-0.5 rounded border ${ws.ownerEmail.toLowerCase() === user.email.toLowerCase() ? "border-primary/40 text-primary" : "border-border text-muted-foreground"}`}>
+                      {ws.ownerEmail.toLowerCase() === user.email.toLowerCase() ? "Owner" : "Member"}
+                    </span>
+                  </p>
+                  <div className="flex items-center gap-3 mt-1">
+                    <span className="text-[11px] text-muted-foreground font-mono">{ws.roomCode}</span>
+                    <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                      <Users className="h-3 w-3" /> {ws.memberCount}
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground mt-1">
+                    {new Date(ws.createdAt).toLocaleDateString()}
+                  </p>
+                </div>
+                <Link to={`/workspace/${ws.roomCode}`}>
+                  <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0">
+                    <ExternalLink className="h-4 w-4" />
+                  </Button>
+                </Link>
+              </div>
+            ))}
+          </div>
+          </section>
+        </div>
+
+        <div className="mt-8 animate-slide-up" style={{ animationDelay: "200ms" }}>
+          <h2 className="text-lg font-semibold text-foreground mb-4">Solo Workspaces</h2>
+          <section ref={filesSectionRef} className="space-y-2">
+            {soloWorkspaces.length === 0 ? (
+              <div className="text-sm text-muted-foreground">No solo workspace files yet. Open Solo Workspace and start coding.</div>
+            ) : (
+              soloWorkspaces.map((entry) => (
+                <div key={entry.key} className="stat-card">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-foreground truncate">{entry.fileName}</p>
+                      <p className="text-xs text-muted-foreground truncate mt-1">{entry.preview}</p>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground shrink-0">{new Date(entry.savedAt).toLocaleString()}</p>
+                  </div>
+                </div>
+              ))
+            )}
+          </section>
+        </div>
+
+        <div className="mt-8 animate-slide-up" style={{ animationDelay: "220ms" }}>
           <h2 className="text-lg font-semibold text-foreground mb-4">Recent Activity</h2>
           <div className="space-y-2">
             {dashboard?.recentActivity?.length ? (
@@ -180,37 +302,6 @@ const Dashboard = () => {
             ) : (
               <div className="text-sm text-muted-foreground">No recent activity yet.</div>
             )}
-          </div>
-        </div>
-
-        <div className="mt-8 animate-slide-up" style={{ animationDelay: "200ms" }}>
-          <h2 className="text-lg font-semibold text-foreground mb-4">Recent Workspaces</h2>
-          <div className="grid sm:grid-cols-2 gap-3">
-            {loadingRooms && <div className="text-sm text-muted-foreground">Loading rooms...</div>}
-            {!loadingRooms && rooms.length === 0 && (
-              <div className="text-sm text-muted-foreground">No rooms yet. Create one to get started.</div>
-            )}
-            {rooms.map((ws) => (
-              <div key={ws.id} className="stat-card flex items-center justify-between">
-                <div className="min-w-0">
-                  <h3 className="text-sm font-semibold text-foreground truncate">{ws.roomName}</h3>
-                  <div className="flex items-center gap-3 mt-1">
-                    <span className="text-[11px] text-muted-foreground font-mono">{ws.roomCode}</span>
-                    <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
-                      <Users className="h-3 w-3" /> {ws.memberCount}
-                    </span>
-                  </div>
-                  <p className="text-[10px] text-muted-foreground mt-1">
-                    {new Date(ws.createdAt).toLocaleDateString()}
-                  </p>
-                </div>
-                <Link to={`/workspace/${ws.roomCode}`}>
-                  <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0">
-                    <ExternalLink className="h-4 w-4" />
-                  </Button>
-                </Link>
-              </div>
-            ))}
           </div>
         </div>
       </main>
