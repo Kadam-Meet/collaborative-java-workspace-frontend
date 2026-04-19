@@ -26,14 +26,16 @@ const VersionHistory = ({ versions, onRevert, onDelete, onCompare, loading = fal
 
 	return (
 		<div className="space-y-2">
-			{visibleVersions.map((version) => (
+			{visibleVersions.map((version) => {
+				const versionTag = version.versionLabel || version.message;
+				return (
 				<div key={version.id} className="bg-surface rounded-md p-2 group">
 					<div className="flex items-center justify-between gap-2 mb-1 min-w-0">
 						<div className="flex items-center gap-1 min-w-0">
 							<GitBranch className="h-3 w-3 text-primary flex-shrink-0" />
 							<span className="text-xs font-semibold text-foreground flex-shrink-0">v{version.versionNumber}</span>
-							{version.versionLabel && (
-								<span className="text-xs text-muted-foreground truncate">({version.versionLabel})</span>
+							{versionTag && (
+								<span className="text-xs text-muted-foreground truncate">({versionTag})</span>
 							)}
 						</div>
 						<div className="flex items-center gap-0.5 flex-shrink-0">
@@ -74,7 +76,8 @@ const VersionHistory = ({ versions, onRevert, onDelete, onCompare, loading = fal
 						{(version.authorName || version.authorEmail || "Unknown") + " • " + new Date(version.createdAt).toLocaleString()}
 					</p>
 				</div>
-			))}
+				);
+			})}
 		</div>
 	);
 };

@@ -586,24 +586,7 @@ const Workspace = () => {
   };
 
   const handleSaveVersion = async () => {
-    if (!isStandalone && room && activeFileId) {
-      try {
-        await saveVersionSnapshot(room.id, activeFileId, code);
-        const files = await getRoomFiles(room.id);
-        const history = (await getFileVersions(room.id, activeFileId)).slice(0, 5);
-        setRoomFiles(files);
-        setVersions(history);
-        const activity = await getRoomActivity(room.id);
-        setRoomActivity(activity);
-        toast.success("Version saved");
-        return;
-      } catch (error) {
-        toast.error(getUserFriendlyErrorMessage(error, "Unable to save version"));
-        return;
-      }
-    }
-
-    if (isStandalone && activeFileId) {
+    if (activeFileId) {
       setVersionLabelDraft("");
       setShowVersionLabelDialog(true);
       return;
@@ -613,17 +596,28 @@ const Workspace = () => {
   };
 
   const handleSaveVersionWithLabel = async () => {
-    if (!isStandalone || !activeFileId) {
+    if (!activeFileId) {
       return;
     }
 
     try {
-      await saveSoloVersionSnapshot(activeFileId, {
-        fileName: activeFileName,
-        content: code,
-        versionLabel: versionLabelDraft.trim() || undefined,
-      });
-      setVersions(await getSoloFileVersions(activeFileId));
+      if (isStandalone) {
+        await saveSoloVersionSnapshot(activeFileId, {
+          fileName: activeFileName,
+          content: code,
+          versionLabel: versionLabelDraft.trim() || undefined,
+        });
+        setVersions(await getSoloFileVersions(activeFileId));
+      } else if (room) {
+        await saveVersionSnapshot(room.id, activeFileId, code, versionLabelDraft.trim() || undefined);
+        const files = await getRoomFiles(room.id);
+        const history = (await getFileVersions(room.id, activeFileId)).slice(0, 5);
+        setRoomFiles(files);
+        setVersions(history);
+        const activity = await getRoomActivity(room.id);
+        setRoomActivity(activity);
+      }
+
       toast.success("Version saved");
       setShowVersionLabelDialog(false);
       setVersionLabelDraft("");
@@ -1806,14 +1800,16 @@ const Workspace = () => {
 
         <div className="w-80 workspace-panel flex flex-col overflow-hidden shrink-0">
           <Tabs defaultValue="analysis" className="flex flex-col h-full">
-            <TabsList className="w-full rounded-none border-b border-border bg-transparent h-9 px-2">
-              <TabsTrigger value="analysis" className="text-xs flex-1 data-[state=active]:bg-surface rounded-md h-6">Analysis</TabsTrigger>
-              <TabsTrigger value="issues" className="text-xs flex-1 data-[state=active]:bg-surface rounded-md h-6">Issues</TabsTrigger>
-              <TabsTrigger value="learning" className="text-xs flex-1 data-[state=active]:bg-surface rounded-md h-6">Learning</TabsTrigger>
-              <TabsTrigger value="comments" className="text-xs flex-1 data-[state=active]:bg-surface rounded-md h-6">Comments</TabsTrigger>
-              <TabsTrigger value="search" className="text-xs flex-1 data-[state=active]:bg-surface rounded-md h-6">Search</TabsTrigger>
-              <TabsTrigger value="activity" className="text-xs flex-1 data-[state=active]:bg-surface rounded-md h-6">Activity</TabsTrigger>
-            </TabsList>
+            <div className="overflow-x-auto border-b border-border">
+              <TabsList className="w-max min-w-full rounded-none bg-transparent h-9 px-2 justify-start">
+                <TabsTrigger value="analysis" className="text-xs whitespace-nowrap data-[state=active]:bg-surface rounded-md h-6">Analysis</TabsTrigger>
+                <TabsTrigger value="issues" className="text-xs whitespace-nowrap data-[state=active]:bg-surface rounded-md h-6">Issues</TabsTrigger>
+                <TabsTrigger value="learning" className="text-xs whitespace-nowrap data-[state=active]:bg-surface rounded-md h-6">Learning</TabsTrigger>
+                <TabsTrigger value="comments" className="text-xs whitespace-nowrap data-[state=active]:bg-surface rounded-md h-6">Comments</TabsTrigger>
+                <TabsTrigger value="search" className="text-xs whitespace-nowrap data-[state=active]:bg-surface rounded-md h-6">Search</TabsTrigger>
+                <TabsTrigger value="activity" className="text-xs whitespace-nowrap data-[state=active]:bg-surface rounded-md h-6">Activity</TabsTrigger>
+              </TabsList>
+            </div>
             <ScrollArea className="flex-1">
               <TabsContent value="analysis" className="mt-0"><AnalysisPanel result={analysis} /></TabsContent>
               <TabsContent value="issues" className="mt-0"><IssuesPanel issues={issues} /></TabsContent>
@@ -1974,12 +1970,20 @@ const Workspace = () => {
       </div>
 
       {/* Version Label Dialog */}
-      <Dialog open={showVersionLabelDialog} onOpenChange={setShowVersionLabelDialog}>
+      <Dialog
+        open={showVersionLabelDialog}
+        onOpenChange={(open) => {
+          setShowVersionLabelDialog(open);
+          if (!open) {
+            setVersionLabelDraft("");
+          }
+        }}
+      >
         <DialogContent className="sm:max-w-[400px]">
           <DialogHeader>
             <DialogTitle>Save Version</DialogTitle>
             <DialogDescription>
-              Give this version a name to remember what it was about
+              Give this version a name to remember what it was about (optional)
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
