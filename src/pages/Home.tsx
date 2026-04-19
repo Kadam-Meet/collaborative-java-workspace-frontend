@@ -1,4 +1,5 @@
-import { Link } from "react-router-dom";
+import { useEffect } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import Navbar from "@/components/layout/Navbar";
 import { Button } from "@/components/ui/button";
 import { Code2, Users, Zap, BarChart3, GitBranch, BookOpen, ArrowRight, ChevronRight } from "lucide-react";
@@ -18,6 +19,22 @@ const steps = [
 ];
 
 const Home = () => {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+
+  useEffect(() => {
+    const inviteToken = (searchParams.get("inviteToken") ?? "").trim();
+    if (inviteToken) {
+      navigate(`/invite?token=${encodeURIComponent(inviteToken)}`, { replace: true });
+      return;
+    }
+
+    const resetToken = (searchParams.get("resetToken") ?? "").trim();
+    if (resetToken) {
+      navigate(`/reset-password?token=${encodeURIComponent(resetToken)}`, { replace: true });
+    }
+  }, [navigate, searchParams]);
+
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <Navbar showAuth={false}>
