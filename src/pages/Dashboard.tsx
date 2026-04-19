@@ -7,18 +7,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Activity, ExternalLink, Plus, Trash2, Users } from "lucide-react";
 import { toast } from "sonner";
-import { createRoom, getMyRooms, joinRoom } from "@/api/workspaceApi";
+import { createRoom, deleteSoloWorkspace, getMyRooms, getSoloWorkspaces, joinRoom } from "@/api/workspaceApi";
 import { getDashboardSummary } from "@/api/dashboardApi";
-import type { DashboardSummary, RoomSummary } from "@/types/workspace.types";
+import type { DashboardSummary, RoomSummary, SoloWorkspaceSummary } from "@/types/workspace.types";
 import { getUserFriendlyErrorMessage } from "@/hooks/useToast";
-import { clearDraftSnapshot } from "@/utils/draftStorage";
-
-type SoloWorkspaceEntry = {
-  key: string;
-  fileName: string;
-  savedAt: string;
-  preview: string;
-};
 
 const Dashboard = () => {
   const { user, token, loading: authLoading, isAuthenticated } = useAuth();
@@ -26,10 +18,11 @@ const Dashboard = () => {
   const [rooms, setRooms] = useState<RoomSummary[]>([]);
   const [dashboard, setDashboard] = useState<DashboardSummary | null>(null);
   const [loadingRooms, setLoadingRooms] = useState(true);
+  const [loadingSoloWorkspaces, setLoadingSoloWorkspaces] = useState(true);
+  const [deletingSoloWorkspaceId, setDeletingSoloWorkspaceId] = useState<number | null>(null);
   const [newRoomName, setNewRoomName] = useState("");
   const [joinRoomCode, setJoinRoomCode] = useState("");
   const [saving, setSaving] = useState(false);
-  const [soloWorkspaces, setSoloWorkspaces] = useState<SoloWorkspaceEntry[]>([]);
   const roomsSectionRef = useRef<HTMLElement | null>(null);
   const filesSectionRef = useRef<HTMLElement | null>(null);
 
@@ -60,56 +53,44 @@ const Dashboard = () => {
     if (!user) {
       return;
     }
+  }, [user]);
 
-    const normalizedEmail = user.email.trim().toLowerCase();
-    const prefix = `java-workspace:draft:${normalizedEmail}:standalone:`;
-    const entries: SoloWorkspaceEntry[] = [];
-
-    for (let index = 0; index < window.localStorage.length; index += 1) {
-      const key = window.localStorage.key(index);
-      if (!key || !key.startsWith(prefix)) {
-        continue;
-      }
-
-      const raw = window.localStorage.getItem(key);
-      if (!raw) {
-        continue;
-      }
-
-      try {
-        const parsed = JSON.parse(raw) as { fileName?: string; savedAt?: string; content?: string };
-        const fileName = (parsed.fileName || key.slice(prefix.length) || "Untitled.java").trim();
-        const savedAt = parsed.savedAt || new Date().toISOString();
-        const firstLine = (parsed.content || "").split("\n").find((line) => line.trim()) || "Unsaved draft";
-        entries.push({
-          key,
-          fileName,
-          savedAt,
-          preview: firstLine.slice(0, 120),
-        });
-      } catch {
-        // Ignore malformed local storage entries.
-      }
+  useEffect(() => {
+    if (authLoading || !isAuthenticated || !token) {
+      return;
     }
 
-    entries.sort((a, b) => Date.parse(b.savedAt) - Date.parse(a.savedAt));
-    setSoloWorkspaces(entries);
-  }, [user]);
+    setLoadingSoloWorkspaces(true);
+    void getSoloWorkspaces()
+      .then(setSoloWorkspaces)
+      .catch((error) => {
+        toast.error(getUserFriendlyErrorMessage(error, "Unable to load solo workspaces"));
+        setSoloWorkspaces([]);
+      })
+      .finally(() => setLoadingSoloWorkspaces(false));
+  }, [authLoading, isAuthenticated, token]);
 
   const scrollToSection = (section: "rooms" | "files") => {
     const target = section === "rooms" ? roomsSectionRef.current : filesSectionRef.current;
     target?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
-  const handleDeleteSoloWorkspace = (entry: SoloWorkspaceEntry) => {
+  const handleDeleteSoloWorkspace = async (entry: SoloWorkspaceSummary) => {
     const confirmed = window.confirm(`Delete solo workspace ${entry.fileName}?`);
     if (!confirmed) {
       return;
     }
 
-    clearDraftSnapshot(entry.key);
-    setSoloWorkspaces((prev) => prev.filter((item) => item.key !== entry.key));
-    toast.success(`Deleted ${entry.fileName}`);
+    try {
+      setDeletingSoloWorkspaceId(entry.id);
+      await deleteSoloWorkspace(entry.id);
+      setSoloWorkspaces((prev) => prev.filter((item) => item.id !== entry.id));
+      toast.success(`Deleted ${entry.fileName}`);
+    } catch (error) {
+      toast.error(getUserFriendlyErrorMessage(error, "Unable to delete solo workspace"));
+    } finally {
+      setDeletingSoloWorkspaceId((current) => (current === entry.id ? null : current));
+    }
   };
 
   const handleCreateRoom = async () => {
@@ -276,19 +257,36 @@ const Dashboard = () => {
           <h2 className="text-lg font-semibold text-foreground mb-4">Solo Workspaces</h2>
           <section ref={filesSectionRef} className="space-y-2">
             {soloWorkspaces.length === 0 ? (
-              <div className="text-sm text-muted-foreground">No solo workspace files yet. Open Solo Workspace and start coding.</div>
+              <div className="text-sm text-muted-foreground">
+                {loadingSoloWorkspaces ? "Loading solo workspaces..." : "No solo workspace files yet. Open Solo Workspace and start coding."}
+              </div>
             ) : (
               soloWorkspaces.map((entry) => (
-                <div key={entry.key} className="stat-card">
+                <div key={entry.id} className="stat-card">
                   <div className="flex items-center justify-between gap-3">
                     <div className="min-w-0">
                       <p className="text-sm font-semibold text-foreground truncate">{entry.fileName}</p>
-                      <p className="text-xs text-muted-foreground truncate mt-1">{entry.preview}</p>
+                      <p className="text-xs text-muted-foreground truncate mt-1">{entry.contentPreview}</p>
                     </div>
                     <div className="shrink-0 flex items-center gap-2">
-                      <p className="text-[11px] text-muted-foreground">{new Date(entry.savedAt).toLocaleString()}</p>
-                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleDeleteSoloWorkspace(entry)}>
-                        <Trash2 className="h-3.5 w-3.5" />
+                      <p className="text-[11px] text-muted-foreground">{new Date(entry.updatedAt).toLocaleString()}</p>
+                      <Link to={`/workspace?soloId=${entry.id}`}>
+                        <Button variant="ghost" size="icon" className="h-7 w-7">
+                          <ExternalLink className="h-3.5 w-3.5" />
+                        </Button>
+                      </Link>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7"
+                        onClick={() => void handleDeleteSoloWorkspace(entry)}
+                        disabled={deletingSoloWorkspaceId === entry.id}
+                      >
+                        {deletingSoloWorkspaceId === entry.id ? (
+                          <span className="text-[10px] font-medium">...</span>
+                        ) : (
+                          <Trash2 className="h-3.5 w-3.5" />
+                        )}
                       </Button>
                     </div>
                   </div>

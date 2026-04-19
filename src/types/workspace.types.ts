@@ -8,6 +8,18 @@ export interface RoomSummary {
   fileCount: number;
 }
 
+export interface SoloWorkspaceSummary {
+  id: number;
+  fileName: string;
+  contentPreview: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SoloWorkspaceResponse extends SoloWorkspaceSummary {
+  content: string;
+}
+
 export interface RoomMember {
   id: number;
   name: string;

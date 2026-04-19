@@ -10,6 +10,8 @@ import type {
   RoomFileContent,
   RoomMember,
   RoomSearchResults,
+  SoloWorkspaceResponse,
+  SoloWorkspaceSummary,
   RoomSummary,
   VersionCompareResult,
   VersionDeleteResult,
@@ -43,6 +45,11 @@ interface WorkspaceRequestPayload {
   resolved?: boolean;
 }
 
+interface SoloWorkspaceRequestPayload {
+  fileName: string;
+  content: string;
+}
+
 async function workspaceRequest<T>(
   path: string,
   method: "GET" | "POST" | "PUT" | "DELETE",
@@ -69,6 +76,30 @@ export function updateRoom(roomId: number, roomName: string): Promise<RoomSummar
 
 export function deleteRoom(roomId: number): Promise<{ status: string; roomId: number }> {
   return workspaceRequest<{ status: string; roomId: number }>(`/api/workspaces/rooms/${roomId}`, "DELETE");
+}
+
+export function getSoloWorkspaces(): Promise<SoloWorkspaceSummary[]> {
+  return workspaceRequest<SoloWorkspaceSummary[]>('/api/workspaces/solo', 'GET');
+}
+
+export function getLatestSoloWorkspace(): Promise<SoloWorkspaceResponse> {
+  return workspaceRequest<SoloWorkspaceResponse>("/api/workspaces/solo/latest", "GET");
+}
+
+export function getSoloWorkspace(soloWorkspaceId: number): Promise<SoloWorkspaceResponse> {
+  return workspaceRequest<SoloWorkspaceResponse>(`/api/workspaces/solo/${soloWorkspaceId}`, "GET");
+}
+
+export function createSoloWorkspace(payload: SoloWorkspaceRequestPayload): Promise<SoloWorkspaceResponse> {
+  return workspaceRequest<SoloWorkspaceResponse>("/api/workspaces/solo", "POST", payload);
+}
+
+export function updateSoloWorkspace(soloWorkspaceId: number, payload: SoloWorkspaceRequestPayload): Promise<SoloWorkspaceResponse> {
+  return workspaceRequest<SoloWorkspaceResponse>(`/api/workspaces/solo/${soloWorkspaceId}`, "PUT", payload);
+}
+
+export function deleteSoloWorkspace(soloWorkspaceId: number): Promise<void> {
+  return workspaceRequest<void>(`/api/workspaces/solo/${soloWorkspaceId}`, "DELETE");
 }
 
 export function getMyRooms(): Promise<RoomSummary[]> {

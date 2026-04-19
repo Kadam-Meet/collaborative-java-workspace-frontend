@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Navigate, useNavigate, useParams } from "react-router-dom";
+import { Navigate, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import Navbar from "@/components/layout/Navbar";
 import Sidebar from "@/components/layout/Sidebar";
 import EditorPanel from "@/components/workspace/EditorPanel";
@@ -22,11 +22,13 @@ import {
   addRoomMember,
   addFileComment,
   compareVersions,
+  createSoloWorkspace,
   createRoomFile,
   deleteFileVersion,
   deleteFolder,
   deleteRoom,
   deleteRoomFile,
+  deleteSoloWorkspace,
   downloadRoomFile,
   getFileComments,
   getFileVersions,
@@ -36,10 +38,12 @@ import {
   getRoomActivity,
   getRoomFile,
   getRoomFiles,
+  getLatestSoloWorkspace,
   getVersionDetail,
   getRoomMembers,
   joinRoom,
   listFileLocks,
+  getSoloWorkspace,
   replyToComment,
   revertFileVersion,
   resolveComment,
@@ -49,12 +53,13 @@ import {
   saveRoomFile,
   saveVersionSnapshot,
   searchRoom,
+  updateSoloWorkspace,
   updateRoomMemberPermissions,
   uploadRoomJavaFile,
 } from "@/api/workspaceApi";
 import type { ActivityFilters, CommentEntry, FileLockEntry, PendingInvitationSummary, RoomActivity, RoomFile, RoomMember, RoomSearchResults, RoomSummary, VersionCompareResult, VersionEntry } from "@/types/workspace.types";
 import { useAuth } from "@/hooks/useAuth";
-import { buildDraftStorageKey, clearDraftSnapshot, isDraftNewerThanServer, loadDraftSnapshot, renameDraftSnapshot, saveDraftSnapshot } from "@/utils/draftStorage";
+import { buildDraftStorageKey, isDraftNewerThanServer, loadDraftSnapshot, saveDraftSnapshot } from "@/utils/draftStorage";
 import type { RoomRealtimeEvent } from "@/services/socketService";
 
 type RemoteSelectionState = {
@@ -82,6 +87,7 @@ const EMPTY_ANALYSIS: WorkspaceAnalysis = {
 const Workspace = () => {
   const { user, token, loading: authLoading, isAuthenticated } = useAuth();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { roomId } = useParams();
   const isStandalone = !roomId;
   const [code, setCode] = useState(EMPTY_JAVA_CODE);
@@ -102,8 +108,10 @@ const Workspace = () => {
   const [renameDraft, setRenameDraft] = useState("Untitled.java");
   const [loadingRoom, setLoadingRoom] = useState(true);
   const [localDraftSavedAt, setLocalDraftSavedAt] = useState<Date | null>(null);
+  const [soloWorkspaceId, setSoloWorkspaceId] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const lastSyncedCodeRef = useRef(code);
+  const lastSyncedNameRef = useRef(activeFileName);
   const codeRef = useRef(code);
   const analysisRequestSeq = useRef(0);
   const typingResetTimerRef = useRef<number | null>(null);
@@ -122,10 +130,15 @@ const Workspace = () => {
   const [searchResults, setSearchResults] = useState<RoomSearchResults | null>(null);
   const [versionComparison, setVersionComparison] = useState<VersionCompareResult | null>(null);
   const [activityFilters, setActivityFilters] = useState<ActivityFilters>({});
+  const [deletingSoloWorkspace, setDeletingSoloWorkspace] = useState(false);
 
   useEffect(() => {
     codeRef.current = code;
   }, [code]);
+
+  useEffect(() => {
+    lastSyncedNameRef.current = activeFileName;
+  }, [activeFileName]);
 
   useEffect(() => {
     if (isStandalone) {
@@ -171,7 +184,7 @@ const Workspace = () => {
     );
 
     if (!confirmed) {
-      clearDraftSnapshot(storageKey);
+      window.localStorage.removeItem(storageKey);
       return { content: params.content, restored: false };
     }
 
@@ -240,31 +253,63 @@ const Workspace = () => {
     }
 
     if (!roomId) {
-      const restored = resolveDraftContent({
-        content: EMPTY_JAVA_CODE,
-        fileName: "Untitled.java",
-        standalone: true,
-      });
-      setLoadingRoom(false);
-      setRoom(null);
-      setRoomMembers([]);
-      setPendingInvitations([]);
-      setRoomFiles([]);
-      setVersions([]);
-      setRoomActivity([]);
-      setRemoteSelections({});
-      setFileLocks({});
-      setComments([]);
-      setSearchResults(null);
-      setActiveFileId(null);
-      setActiveFileUpdatedAt(null);
-      setActiveFileName("Untitled.java");
-      setCode(restored.content);
-      lastSyncedCodeRef.current = restored.content;
+      const soloWorkspaceIdParam = searchParams.get("soloId");
+
+      const resetStandaloneState = (nextCode = EMPTY_JAVA_CODE, nextName = "Untitled.java", nextId: number | null = null) => {
+        setSoloWorkspaceId(nextId);
+        setRoom(null);
+        setRoomMembers([]);
+        setPendingInvitations([]);
+        setRoomFiles([]);
+        setVersions([]);
+        setRoomActivity([]);
+        setRemoteSelections({});
+        setFileLocks({});
+        setComments([]);
+        setSearchResults(null);
+        setActiveFileId(null);
+        setActiveFileUpdatedAt(null);
+        setActiveFileName(nextName);
+        setRenameDraft(nextName);
+        setCode(nextCode);
+        lastSyncedCodeRef.current = nextCode;
+        lastSyncedNameRef.current = nextName;
+        setAnalysis(EMPTY_ANALYSIS);
+        setIssues([]);
+        setBackendAvailable(true);
+      };
+
+      const loadStandaloneWorkspace = async () => {
+        try {
+          if (soloWorkspaceIdParam) {
+            const workspace = await getSoloWorkspace(Number(soloWorkspaceIdParam));
+            resetStandaloneState(workspace.content || "", workspace.fileName, workspace.id);
+            setLoadingRoom(false);
+            return;
+          }
+
+          try {
+            const latest = await getLatestSoloWorkspace();
+            resetStandaloneState(latest.content || "", latest.fileName, latest.id);
+            setSearchParams({ soloId: String(latest.id) }, { replace: true });
+            setLoadingRoom(false);
+            return;
+          } catch {
+            resetStandaloneState();
+          }
+        } catch (error) {
+          toast.error(getUserFriendlyErrorMessage(error, "Unable to load solo workspace"));
+          resetStandaloneState();
+        } finally {
+          setLoadingRoom(false);
+        }
+      };
+
+      void loadStandaloneWorkspace();
       return;
     }
     void loadRoomContext(roomId);
-  }, [authLoading, isAuthenticated, token, roomId, resolveDraftContent]);
+  }, [authLoading, isAuthenticated, token, roomId, resolveDraftContent, searchParams, setSearchParams]);
 
   const handleAnalyze = async () => {
     if (!code.trim()) {
@@ -393,22 +438,6 @@ const Workspace = () => {
       return;
     }
 
-    const oldKey = buildDraftStorageKey({
-      userEmail: user.email,
-      roomId: null,
-      fileId: null,
-      fileName: activeFileName,
-      isStandalone: true,
-    });
-    const newKey = buildDraftStorageKey({
-      userEmail: user.email,
-      roomId: null,
-      fileId: null,
-      fileName: normalizedName,
-      isStandalone: true,
-    });
-
-    renameDraftSnapshot(oldKey, newKey, normalizedName);
     setActiveFileName(normalizedName);
     setRenameDraft(normalizedName);
     toast.success(`Renamed to ${normalizedName}`);
@@ -813,19 +842,28 @@ const Workspace = () => {
       return;
     }
 
-    const storageKey = buildDraftStorageKey({
-      userEmail: user.email,
-      roomId: null,
-      fileId: null,
-      fileName: activeFileName,
-      isStandalone: true,
-    });
-    clearDraftSnapshot(storageKey);
-    setCode(EMPTY_JAVA_CODE);
-    setActiveFileName("Untitled.java");
-    setRenameDraft("Untitled.java");
-    toast.success("Solo workspace deleted");
-    navigate("/dashboard");
+    void (async () => {
+      try {
+        setDeletingSoloWorkspace(true);
+        if (soloWorkspaceId) {
+          await deleteSoloWorkspace(soloWorkspaceId);
+        }
+        setSoloWorkspaceId(null);
+        setCode(EMPTY_JAVA_CODE);
+        setActiveFileName("Untitled.java");
+        setRenameDraft("Untitled.java");
+        setActiveFileUpdatedAt(null);
+        lastSyncedCodeRef.current = EMPTY_JAVA_CODE;
+        lastSyncedNameRef.current = "Untitled.java";
+        setSearchParams({}, { replace: true });
+        toast.success("Solo workspace deleted");
+        navigate("/dashboard");
+      } catch (error) {
+        toast.error(getUserFriendlyErrorMessage(error, "Unable to delete solo workspace"));
+      } finally {
+        setDeletingSoloWorkspace(false);
+      }
+    })();
   };
 
   const handleCompareVersion = async (versionId: number) => {
@@ -1180,7 +1218,19 @@ const Workspace = () => {
     isStandalone,
   }), [user.email, room?.id, activeFileId, activeFileName, isStandalone]);
 
+  const shouldPersistSoloWorkspace = useMemo(() => {
+    if (!isStandalone) {
+      return false;
+    }
+
+    return Boolean(code.trim() || activeFileName !== "Untitled.java" || soloWorkspaceId !== null);
+  }, [isStandalone, code, activeFileName, soloWorkspaceId]);
+
   useEffect(() => {
+    if (isStandalone) {
+      return;
+    }
+
     const timeoutId = window.setTimeout(() => {
       saveDraftSnapshot(draftStorageKey, {
         content: code,
@@ -1192,24 +1242,56 @@ const Workspace = () => {
     }, 500);
 
     return () => window.clearTimeout(timeoutId);
-  }, [draftStorageKey, code, activeFileName, activeFileUpdatedAt]);
+  }, [isStandalone, draftStorageKey, code, activeFileName, activeFileUpdatedAt]);
 
   const performRemoteAutoSave = useCallback(async () => {
-    if (isStandalone || !room || !activeFileId || !activeFileUpdatedAt) {
+    if (!room || !activeFileId || !activeFileUpdatedAt) {
       return;
     }
 
     const saved = await saveRoomFile(room.id, activeFileId, code, activeFileUpdatedAt, activeFileName);
     setActiveFileUpdatedAt(saved.updatedAt);
+    setActiveFileName(saved.filePath || activeFileName);
     lastSyncedCodeRef.current = saved.content || "";
-  }, [isStandalone, room, activeFileId, activeFileUpdatedAt, code, activeFileName]);
+    lastSyncedNameRef.current = saved.filePath || activeFileName;
+  }, [room, activeFileId, activeFileUpdatedAt, code, activeFileName]);
+
+  const performSoloAutoSave = useCallback(async () => {
+    if (!isStandalone || !shouldPersistSoloWorkspace) {
+      return;
+    }
+
+    const payload = {
+      fileName: activeFileName,
+      content: code,
+    };
+
+    const saved = soloWorkspaceId
+      ? await updateSoloWorkspace(soloWorkspaceId, payload)
+      : await createSoloWorkspace(payload);
+
+    setSoloWorkspaceId(saved.id);
+    setActiveFileName(saved.fileName);
+    setActiveFileUpdatedAt(saved.updatedAt);
+    lastSyncedCodeRef.current = saved.content || "";
+    lastSyncedNameRef.current = saved.fileName;
+    setRenameDraft(saved.fileName);
+    setLocalDraftSavedAt(new Date());
+    if (searchParams.get("soloId") !== String(saved.id)) {
+      setSearchParams({ soloId: String(saved.id) }, { replace: true });
+    }
+  }, [isStandalone, shouldPersistSoloWorkspace, activeFileName, code, soloWorkspaceId, searchParams, setSearchParams]);
 
   const autoSave = useAutoSave({
-    enabled: !isStandalone && Boolean(room && activeFileId && activeFileUpdatedAt),
-    value: code,
-    hasChanges: code !== lastSyncedCodeRef.current,
+    enabled: isStandalone
+      ? shouldPersistSoloWorkspace
+      : Boolean(room && activeFileId && activeFileUpdatedAt),
+    value: `${code}\u0000${activeFileName}`,
+    hasChanges: isStandalone
+      ? code !== lastSyncedCodeRef.current || activeFileName !== lastSyncedNameRef.current
+      : code !== lastSyncedCodeRef.current || activeFileName !== lastSyncedNameRef.current,
     delayMs: 1200,
-    onSave: performRemoteAutoSave,
+    onSave: isStandalone ? performSoloAutoSave : performRemoteAutoSave,
     onError: (error) => {
       toast.error(getUserFriendlyErrorMessage(error, "Unable to sync file changes"));
     },
@@ -1296,8 +1378,14 @@ const Workspace = () => {
               <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => void handleRenameFile()}>
                 Rename
               </Button>
-              <Button variant="outline" size="sm" className="h-7 text-xs border-destructive/30 text-destructive hover:bg-destructive/10" onClick={handleDeleteStandaloneWorkspace}>
-                Delete
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs border-destructive/30 text-destructive hover:bg-destructive/10"
+                onClick={handleDeleteStandaloneWorkspace}
+                disabled={deletingSoloWorkspace}
+              >
+                {deletingSoloWorkspace ? "Deleting..." : "Delete"}
               </Button>
             </div>
           )}
