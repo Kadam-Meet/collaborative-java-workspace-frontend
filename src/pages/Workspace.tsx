@@ -10,10 +10,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Download, Upload, Zap, Hash, Users } from "lucide-react";
+import { Download, Upload, Zap, Hash, Users, Save } from "lucide-react";
 import { toast } from "sonner";
 import { analyzeJavaWorkspace } from "@/api/analysisApi";
 import type { WorkspaceAnalysis, WorkspaceIssue } from "@/api/analysisApi";
+import { ApiError } from "@/api/axiosClient";
 import { getUserFriendlyErrorMessage } from "@/hooks/useToast";
 import { useAutoSave } from "@/hooks/useAutoSave";
 import { useSocket } from "@/hooks/useSocket";
@@ -114,6 +115,7 @@ const Workspace = () => {
   const lastSyncedNameRef = useRef(activeFileName);
   const codeRef = useRef(code);
   const analysisRequestSeq = useRef(0);
+  const lastAutoSaveErrorRef = useRef<{ message: string; at: number } | null>(null);
   const typingResetTimerRef = useRef<number | null>(null);
   const lastSelectionRef = useRef({
     startLine: 1,
@@ -131,6 +133,7 @@ const Workspace = () => {
   const [versionComparison, setVersionComparison] = useState<VersionCompareResult | null>(null);
   const [activityFilters, setActivityFilters] = useState<ActivityFilters>({});
   const [deletingSoloWorkspace, setDeletingSoloWorkspace] = useState(false);
+  const [savingWorkspace, setSavingWorkspace] = useState(false);
 
   useEffect(() => {
     codeRef.current = code;
@@ -322,7 +325,7 @@ const Workspace = () => {
     toast.info("Queued backend analysis...");
 
     try {
-      const result = await analyzeJavaWorkspace(code, roomId || `solo-${user.email}`, true);
+      const result = await analyzeJavaWorkspace(code, roomId || `solo-${user.email}`, activeFileName, true);
       if (requestId !== analysisRequestSeq.current) {
         return;
       }
@@ -358,7 +361,7 @@ const Workspace = () => {
     const requestId = ++analysisRequestSeq.current;
     const timeoutId = window.setTimeout(async () => {
       try {
-        const result = await analyzeJavaWorkspace(code, roomId || `solo-${user.email}`, false);
+        const result = await analyzeJavaWorkspace(code, roomId || `solo-${user.email}`, activeFileName, false);
         if (requestId !== analysisRequestSeq.current) {
           return;
         }
@@ -374,7 +377,7 @@ const Workspace = () => {
     }, 1200);
 
     return () => window.clearTimeout(timeoutId);
-  }, [authLoading, isAuthenticated, token, code, roomId, user.email]);
+  }, [authLoading, isAuthenticated, token, code, roomId, user.email, activeFileName]);
 
   const handleDownload = () => {
     const triggerDownload = (blob: Blob, fileName: string) => {
@@ -1249,11 +1252,31 @@ const Workspace = () => {
       return;
     }
 
-    const saved = await saveRoomFile(room.id, activeFileId, code, activeFileUpdatedAt, activeFileName);
-    setActiveFileUpdatedAt(saved.updatedAt);
-    setActiveFileName(saved.filePath || activeFileName);
-    lastSyncedCodeRef.current = saved.content || "";
-    lastSyncedNameRef.current = saved.filePath || activeFileName;
+    try {
+      const saved = await saveRoomFile(room.id, activeFileId, code, activeFileUpdatedAt, activeFileName);
+      setActiveFileUpdatedAt(saved.updatedAt);
+      setActiveFileName(saved.filePath || activeFileName);
+      lastSyncedCodeRef.current = saved.content || "";
+      lastSyncedNameRef.current = saved.filePath || activeFileName;
+      return;
+    } catch (error) {
+      if (!(error instanceof ApiError) || error.status !== 409) {
+        throw error;
+      }
+
+      const latest = await getRoomFile(room.id, activeFileId);
+      const refreshedUpdatedAt = latest.updatedAt;
+      if (!refreshedUpdatedAt) {
+        throw error;
+      }
+
+      setActiveFileUpdatedAt(refreshedUpdatedAt);
+      const saved = await saveRoomFile(room.id, activeFileId, code, refreshedUpdatedAt, activeFileName);
+      setActiveFileUpdatedAt(saved.updatedAt);
+      setActiveFileName(saved.filePath || activeFileName);
+      lastSyncedCodeRef.current = saved.content || "";
+      lastSyncedNameRef.current = saved.filePath || activeFileName;
+    }
   }, [room, activeFileId, activeFileUpdatedAt, code, activeFileName]);
 
   const performSoloAutoSave = useCallback(async () => {
@@ -1282,6 +1305,50 @@ const Workspace = () => {
     }
   }, [isStandalone, shouldPersistSoloWorkspace, activeFileName, code, soloWorkspaceId, searchParams, setSearchParams]);
 
+  const handleManualSave = useCallback(async () => {
+    setSavingWorkspace(true);
+    try {
+      if (isStandalone) {
+        const payload = {
+          fileName: activeFileName,
+          content: code,
+        };
+
+        const saved = soloWorkspaceId
+          ? await updateSoloWorkspace(soloWorkspaceId, payload)
+          : await createSoloWorkspace(payload);
+
+        setSoloWorkspaceId(saved.id);
+        setActiveFileName(saved.fileName);
+        setActiveFileUpdatedAt(saved.updatedAt);
+        lastSyncedCodeRef.current = saved.content || "";
+        lastSyncedNameRef.current = saved.fileName;
+        setRenameDraft(saved.fileName);
+        setLocalDraftSavedAt(new Date());
+        if (searchParams.get("soloId") !== String(saved.id)) {
+          setSearchParams({ soloId: String(saved.id) }, { replace: true });
+        }
+        toast.success("Solo workspace saved");
+        return;
+      }
+
+      await performRemoteAutoSave();
+      toast.success("Workspace saved");
+    } catch (error) {
+      toast.error(getUserFriendlyErrorMessage(error, "Unable to save workspace"));
+    } finally {
+      setSavingWorkspace(false);
+    }
+  }, [
+    isStandalone,
+    activeFileName,
+    code,
+    soloWorkspaceId,
+    searchParams,
+    setSearchParams,
+    performRemoteAutoSave,
+  ]);
+
   const autoSave = useAutoSave({
     enabled: isStandalone
       ? shouldPersistSoloWorkspace
@@ -1293,7 +1360,14 @@ const Workspace = () => {
     delayMs: 1200,
     onSave: isStandalone ? performSoloAutoSave : performRemoteAutoSave,
     onError: (error) => {
-      toast.error(getUserFriendlyErrorMessage(error, "Unable to sync file changes"));
+      const message = getUserFriendlyErrorMessage(error, "Unable to sync file changes");
+      const now = Date.now();
+      const last = lastAutoSaveErrorRef.current;
+      const shouldNotify = !last || last.message !== message || now - last.at > 10000;
+      if (shouldNotify) {
+        toast.error(message);
+        lastAutoSaveErrorRef.current = { message, at: now };
+      }
     },
   });
 
@@ -1395,6 +1469,15 @@ const Workspace = () => {
           </Button>
           <Button variant="ghost" size="sm" className="h-7 text-xs gap-1" onClick={handleDownload}>
             <Download className="h-3 w-3" /> Download
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 text-xs gap-1"
+            onClick={() => void handleManualSave()}
+            disabled={savingWorkspace}
+          >
+            <Save className="h-3 w-3" /> {savingWorkspace ? "Saving..." : "Save"}
           </Button>
           <Button size="sm" className="h-7 text-xs gap-1" onClick={handleAnalyze} disabled={analyzing}>
             <Zap className={`h-3 w-3 ${analyzing ? "animate-pulse-glow" : ""}`} />

@@ -48,7 +48,7 @@ export function useAutoSave({
     }, delayMs);
 
     return () => window.clearTimeout(timeoutId);
-  }, [enabled, hasChanges, value, delayMs, onSave, onError, status]);
+  }, [enabled, hasChanges, value, delayMs, onSave, onError]);
 
   return { status, lastSavedAt };
 }

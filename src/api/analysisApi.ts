@@ -82,13 +82,23 @@ export interface WorkspaceReviewResult {
 	issues: WorkspaceIssue[];
 }
 
-function buildWorkspacePayload(code: string, workspaceName: string, notifyOnCompletion: boolean) {
+function resolveEntryFilePath(fileName?: string) {
+	const raw = (fileName ?? "").trim();
+	const normalized = raw ? raw.replace(/\\/g, "/") : "DataProcessor.java";
+	const withExtension = normalized.toLowerCase().endsWith(".java") ? normalized : `${normalized}.java`;
+	if (withExtension.includes("/")) {
+		return withExtension;
+	}
+	return `src/${withExtension}`;
+}
+
+function buildWorkspacePayload(code: string, workspaceName: string, entryFilePath: string, notifyOnCompletion: boolean) {
 	return {
 		workspaceName,
-		entryFile: "src/DataProcessor.java",
+		entryFile: entryFilePath,
 		notifyOnCompletion,
 		files: {
-			"src/DataProcessor.java": code,
+			[entryFilePath]: code,
 		},
 	};
 }
@@ -96,15 +106,17 @@ function buildWorkspacePayload(code: string, workspaceName: string, notifyOnComp
 export async function queueJavaAnalysis(
 	code: string,
 	workspaceName: string,
+	entryFileName: string,
 	notifyOnCompletion: boolean
 ): Promise<AnalysisJobStartResponse> {
+	const entryFilePath = resolveEntryFilePath(entryFileName);
 	return apiJson<AnalysisJobStartResponse>("/api/v1/analyzer/java/jobs", {
 		method: "POST",
 		auth: true,
 		headers: {
 			"Content-Type": "application/json",
 		},
-		body: JSON.stringify(buildWorkspacePayload(code, workspaceName, notifyOnCompletion)),
+		body: JSON.stringify(buildWorkspacePayload(code, workspaceName, entryFilePath, notifyOnCompletion)),
 	});
 }
 
@@ -149,9 +161,10 @@ function mapFullReview(payload: FullReviewApiResponse): WorkspaceReviewResult {
 export async function analyzeJavaWorkspace(
 	code: string,
 	workspaceName: string,
+	entryFileName: string,
 	notifyOnCompletion = true
 ): Promise<WorkspaceReviewResult> {
-	const queued = await queueJavaAnalysis(code, workspaceName, notifyOnCompletion);
+	const queued = await queueJavaAnalysis(code, workspaceName, entryFileName, notifyOnCompletion);
 	const maxAttempts = 50;
 
 	for (let attempt = 0; attempt < maxAttempts; attempt++) {
