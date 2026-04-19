@@ -16,6 +16,7 @@ const Dashboard = () => {
   const { user, token, loading: authLoading, isAuthenticated } = useAuth();
   const navigate = useNavigate();
   const [rooms, setRooms] = useState<RoomSummary[]>([]);
+  const [soloWorkspaces, setSoloWorkspaces] = useState<SoloWorkspaceSummary[]>([]);
   const [dashboard, setDashboard] = useState<DashboardSummary | null>(null);
   const [loadingRooms, setLoadingRooms] = useState(true);
   const [loadingSoloWorkspaces, setLoadingSoloWorkspaces] = useState(true);
