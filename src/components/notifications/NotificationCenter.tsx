@@ -11,6 +11,7 @@ import { getUserFriendlyErrorMessage } from "@/hooks/useToast";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
 import { useNavigate } from "react-router-dom";
+import { formatSystemDateTime } from "@/utils/formatDate";
 
 const REFRESH_MS = 15000;
 
@@ -178,7 +179,7 @@ const NotificationCenter = () => {
                     </div>
                     <p className="text-xs text-muted-foreground mt-1">{item.message}</p>
                     <p className="text-[10px] text-muted-foreground mt-1">
-                      {new Date(item.createdAt).toLocaleString()}
+                      {formatSystemDateTime(item.createdAt)}
                       {item.roomCode ? ` • ${item.roomCode}` : ""}
                     </p>
                   </button>

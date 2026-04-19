@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Save, Hash, Folder, FolderOpen, FileText, ChevronDown, ChevronRight, FolderPlus, FilePlus2, Trash2 } from "lucide-react";
 import type { PendingInvitationSummary, RoomFile, RoomMember, VersionEntry } from "@/types/workspace.types";
 import VersionHistory from "@/components/workspace/VersionHistory";
+import { formatSystemDate } from "@/utils/formatDate";
 
 interface SidebarProps {
   roomCode: string;
@@ -543,7 +544,7 @@ const Sidebar = ({
                     <span className="text-[10px] text-muted-foreground">{invitation.status}</span>
                   </div>
                   <p className="text-muted-foreground truncate">
-                    {invitation.roomCode || roomCode} • {invitation.expiresAt ? new Date(invitation.expiresAt).toLocaleDateString() : "no expiry"}
+                    {invitation.roomCode || roomCode} • {invitation.expiresAt ? formatSystemDate(invitation.expiresAt) : "no expiry"}
                   </p>
                   <Button
                     type="button"

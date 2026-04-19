@@ -33,6 +33,7 @@ interface WorkspaceRequestPayload {
   content?: string;
   versionMessage?: string;
   expectedUpdatedAt?: string;
+  collaborativeSave?: boolean;
   canEditFiles?: boolean;
   canSaveVersions?: boolean;
   canRevertVersions?: boolean;
@@ -231,13 +232,15 @@ export function saveRoomFile(
   fileId: number,
   content: string,
   expectedUpdatedAt: string,
-  filePath?: string
+  filePath?: string,
+  options?: { collaborativeSave?: boolean }
 ): Promise<RoomFileContent> {
   return workspaceRequest<RoomFileContent>(`/api/workspaces/rooms/${roomId}/files/${fileId}`, "PUT", {
     content,
     filePath,
     language: "java",
     expectedUpdatedAt,
+    collaborativeSave: options?.collaborativeSave,
   });
 }
 

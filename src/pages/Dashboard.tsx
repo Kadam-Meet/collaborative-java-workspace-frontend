@@ -11,6 +11,7 @@ import { createRoom, deleteSoloWorkspace, getMyRooms, getSoloWorkspaces, joinRoo
 import { getDashboardSummary } from "@/api/dashboardApi";
 import type { DashboardSummary, RoomSummary, SoloWorkspaceSummary } from "@/types/workspace.types";
 import { getUserFriendlyErrorMessage } from "@/hooks/useToast";
+import { formatSystemDate, formatSystemDateTime } from "@/utils/formatDate";
 
 const Dashboard = () => {
   const { user, token, loading: authLoading, isAuthenticated } = useAuth();
@@ -240,7 +241,7 @@ const Dashboard = () => {
                     </span>
                   </div>
                   <p className="text-[10px] text-muted-foreground mt-1">
-                    {new Date(ws.createdAt).toLocaleDateString()}
+                    {formatSystemDate(ws.createdAt)}
                   </p>
                 </div>
                 <Link to={`/workspace/${ws.roomCode}`}>
@@ -270,7 +271,7 @@ const Dashboard = () => {
                       <p className="text-xs text-muted-foreground truncate mt-1">{entry.contentPreview}</p>
                     </div>
                     <div className="shrink-0 flex items-center gap-2">
-                      <p className="text-[11px] text-muted-foreground">{new Date(entry.updatedAt).toLocaleString()}</p>
+                      <p className="text-[11px] text-muted-foreground">{formatSystemDateTime(entry.updatedAt)}</p>
                       <Link to={`/workspace?soloId=${entry.id}`}>
                         <Button variant="ghost" size="icon" className="h-7 w-7">
                           <ExternalLink className="h-3.5 w-3.5" />
@@ -310,7 +311,7 @@ const Dashboard = () => {
                     </div>
                     <div className="shrink-0 flex items-center gap-1 text-[11px] text-muted-foreground">
                       <Activity className="h-3 w-3" />
-                      {new Date(entry.createdAt).toLocaleString()}
+                      {formatSystemDateTime(entry.createdAt)}
                     </div>
                   </div>
                 </div>

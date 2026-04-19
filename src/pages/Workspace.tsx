@@ -67,6 +67,7 @@ import {
 import type { ActivityFilters, CommentEntry, FileLockEntry, PendingInvitationSummary, RoomActivity, RoomFile, RoomMember, RoomSearchResults, RoomSummary, SoloWorkspaceSummary, VersionCompareResult, VersionEntry } from "@/types/workspace.types";
 import { useAuth } from "@/hooks/useAuth";
 import { buildDraftStorageKey, isDraftNewerThanServer, loadDraftSnapshot, saveDraftSnapshot } from "@/utils/draftStorage";
+import { formatSystemDateTime } from "@/utils/formatDate";
 import type { RoomRealtimeEvent } from "@/services/socketService";
 
 type RemoteSelectionState = {
@@ -501,7 +502,9 @@ const Workspace = () => {
 
     if (!isStandalone && room && activeFileId && activeFileUpdatedAt) {
       try {
-        const saved = await saveRoomFile(room.id, activeFileId, code, activeFileUpdatedAt, normalizedName);
+        const saved = await saveRoomFile(room.id, activeFileId, code, activeFileUpdatedAt, normalizedName, {
+          collaborativeSave: true,
+        });
         setActiveFileName(saved.filePath || normalizedName);
         setActiveFileUpdatedAt(saved.updatedAt);
         lastSyncedCodeRef.current = saved.content || code;
@@ -1353,7 +1356,7 @@ const Workspace = () => {
   const currentUserMembership = roomMembers.find((member) => member.email.toLowerCase() === user.email.toLowerCase());
   const canEditFiles = isStandalone || canManageMembers || Boolean(currentUserMembership?.canEditFiles);
   const canSaveVersions = isStandalone || canManageMembers || Boolean(currentUserMembership?.canSaveVersions);
-  const canRevertVersions = isStandalone || canManageMembers || Boolean(currentUserMembership?.canRevertVersions);
+  const canRevertVersions = isStandalone || canManageMembers || Boolean(currentUserMembership?.canRevertVersions) || Boolean(currentUserMembership?.canEditFiles);
   const canEditActiveFile = canEditFiles;
   const visibleMembers = isStandalone
     ? [{
@@ -1620,31 +1623,34 @@ const Workspace = () => {
       return;
     }
 
-    try {
-      const saved = await saveRoomFile(room.id, activeFileId, code, activeFileUpdatedAt, activeFileName);
-      setActiveFileUpdatedAt(saved.updatedAt);
-      setActiveFileName(saved.filePath || activeFileName);
-      lastSyncedCodeRef.current = saved.content || "";
-      lastSyncedNameRef.current = saved.filePath || activeFileName;
-      return;
-    } catch (error) {
-      if (!(error instanceof ApiError) || error.status !== 409) {
-        throw error;
-      }
+    let expectedUpdatedAt = activeFileUpdatedAt;
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      try {
+        const saved = await saveRoomFile(room.id, activeFileId, code, expectedUpdatedAt, activeFileName, {
+          collaborativeSave: true,
+        });
+        setActiveFileUpdatedAt(saved.updatedAt);
+        setActiveFileName(saved.filePath || activeFileName);
+        lastSyncedCodeRef.current = saved.content || "";
+        lastSyncedNameRef.current = saved.filePath || activeFileName;
+        return;
+      } catch (error) {
+        if (!(error instanceof ApiError) || error.status !== 409) {
+          throw error;
+        }
 
-      const latest = await getRoomFile(room.id, activeFileId);
-      const refreshedUpdatedAt = latest.updatedAt;
-      if (!refreshedUpdatedAt) {
-        throw error;
-      }
+        const latest = await getRoomFile(room.id, activeFileId);
+        const refreshedUpdatedAt = latest.updatedAt;
+        if (!refreshedUpdatedAt) {
+          throw error;
+        }
 
-      setActiveFileUpdatedAt(refreshedUpdatedAt);
-      const saved = await saveRoomFile(room.id, activeFileId, code, refreshedUpdatedAt, activeFileName);
-      setActiveFileUpdatedAt(saved.updatedAt);
-      setActiveFileName(saved.filePath || activeFileName);
-      lastSyncedCodeRef.current = saved.content || "";
-      lastSyncedNameRef.current = saved.filePath || activeFileName;
+        expectedUpdatedAt = refreshedUpdatedAt;
+        setActiveFileUpdatedAt(refreshedUpdatedAt);
+      }
     }
+
+    throw new Error("Concurrent edits are very active. Please pause briefly and try again.");
   }, [room, activeFileId, activeFileUpdatedAt, code, activeFileName]);
 
   const performSoloAutoSave = useCallback(async () => {
@@ -2053,7 +2059,7 @@ const Workspace = () => {
                         <p className="text-xs font-semibold text-foreground">{event.title}</p>
                         <p className="text-[11px] text-muted-foreground mt-1">{event.description}</p>
                         <p className="text-[10px] text-muted-foreground mt-1">
-                          {(event.actorName || event.actorEmail || "Unknown") + " • " + new Date(event.createdAt).toLocaleString()}
+                          {(event.actorName || event.actorEmail || "Unknown") + " • " + formatSystemDateTime(event.createdAt)}
                         </p>
                       </div>
                     ))}

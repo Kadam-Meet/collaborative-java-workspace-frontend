@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { GitBranch, RotateCcw, Trash2 } from "lucide-react";
 import type { VersionEntry } from "@/types/workspace.types";
+import { formatSystemDateTime } from "@/utils/formatDate";
 
 interface VersionHistoryProps {
 	versions: VersionEntry[];
@@ -107,7 +108,7 @@ const VersionHistory = ({
 					</div>
 					<p className="text-[11px] text-muted-foreground truncate">{version.contentPreview || "(empty snapshot)"}</p>
 					<p className="text-[10px] text-muted-foreground mt-0.5">
-						{(version.authorName || version.authorEmail || "Unknown") + " • " + new Date(version.createdAt).toLocaleString()}
+						{(version.authorName || version.authorEmail || "Unknown") + " • " + formatSystemDateTime(version.createdAt)}
 					</p>
 				</div>
 				);
