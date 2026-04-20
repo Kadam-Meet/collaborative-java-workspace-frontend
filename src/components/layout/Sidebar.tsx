@@ -260,6 +260,24 @@ const Sidebar = ({
           Active: <span className="text-foreground font-mono">{activeFilePath || "none"}</span>
         </p>
 
+        <div className="mb-2 space-y-1">
+          <label className="text-[10px] text-muted-foreground">Target folder</label>
+          <select
+            value={selectedFolder}
+            onChange={(event) => setSelectedFolder(event.target.value)}
+            className="h-7 w-full rounded border border-border bg-surface px-2 text-xs text-foreground"
+          >
+            <option value="">root</option>
+            {folders
+              .filter((folder) => folder !== "")
+              .map((folder) => (
+                <option key={folder} value={folder}>
+                  {folder}
+                </option>
+              ))}
+          </select>
+        </div>
+
         <div className="flex gap-1.5 mb-1.5">
           <Input
             placeholder="New folder, e.g. services/core"
