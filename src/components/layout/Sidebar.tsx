@@ -222,7 +222,7 @@ const Sidebar = ({
   };
 
   return (
-    <aside className="w-64 workspace-panel shrink-0 overflow-y-auto">
+    <aside className="w-64 workspace-panel rounded-xl shrink-0 overflow-y-auto min-h-0">
       {/* Room Info */}
       <div className="p-3 border-b border-border">
         <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Room Info</h3>

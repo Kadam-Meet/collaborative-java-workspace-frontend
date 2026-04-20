@@ -110,19 +110,16 @@ const EditorPanel = ({
   };
 
   return (
-    <div className="flex-1 workspace-panel overflow-hidden flex flex-col">
-      <div className="h-8 border-b border-border flex items-center px-3 gap-2 shrink-0 relative">
+    <div className="h-full workspace-panel rounded-xl overflow-hidden flex flex-col">
+      <div className="h-10 border-b border-border flex items-center px-3 gap-2 shrink-0">
         <div className="flex gap-1.5">
           <div className="w-2.5 h-2.5 rounded-full bg-destructive/60" />
           <div className="w-2.5 h-2.5 rounded-full bg-warning/60" />
           <div className="w-2.5 h-2.5 rounded-full bg-primary/60" />
         </div>
-        <span className="text-xs text-muted-foreground font-mono ml-2">{fileName}</span>
-        <span className="absolute left-1/2 -translate-x-1/2 text-[10px] text-muted-foreground bg-surface border border-border rounded px-2 py-0.5 max-w-[52%] truncate">
-          Active file: <span className="text-foreground">{fileName}</span>
-        </span>
+        <span className="text-xs text-muted-foreground font-mono ml-2 truncate">{fileName}</span>
         {remoteSelections.length > 0 && (
-          <span className="text-[10px] text-muted-foreground ml-auto">
+          <span className="text-[10px] text-muted-foreground ml-auto truncate max-w-[45%] text-right">
             {remoteSelections.filter((entry) => entry.typing).slice(0, 2).map((entry) => entry.userLabel).join(", ")}
             {remoteSelections.some((entry) => entry.typing) ? " typing..." : " editing"}
           </span>

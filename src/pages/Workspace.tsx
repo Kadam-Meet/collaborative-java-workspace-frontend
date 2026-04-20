@@ -1774,7 +1774,7 @@ const Workspace = () => {
   return (
     <div className="h-screen flex flex-col bg-background overflow-hidden">
       <Navbar>
-        <div className="flex items-center gap-2 ml-2">
+        <div className="flex items-center gap-2 ml-2 overflow-x-auto">
           <div className="flex items-center gap-1.5 bg-surface rounded-md px-2 py-1">
             <Hash className="h-3 w-3 text-muted-foreground" />
             <span className="text-xs font-mono text-foreground">{isStandalone ? "STANDALONE" : room?.roomCode}</span>
@@ -1811,8 +1811,13 @@ const Workspace = () => {
           {!backendAvailable && (
             <span className="text-[10px] text-warning px-2">Live error highlight offline</span>
           )}
+        </div>
+      </Navbar>
+
+      <div className="border-b border-border bg-card/80 px-3 py-2 backdrop-blur-sm">
+        <div className="flex flex-wrap items-center gap-2">
           {(isStandalone || activeFileId) && (
-            <div className="flex items-center gap-1.5">
+            <div className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-surface px-2 py-1.5">
               <Input
                 value={renameDraft}
                 onChange={(event) => setRenameDraft(event.target.value)}
@@ -1822,16 +1827,16 @@ const Workspace = () => {
                     void handleRenameFile();
                   }
                 }}
-                className="h-7 w-44 text-xs"
+                className="h-8 w-52 text-xs"
                 placeholder="Rename file"
               />
-              <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => void handleRenameFile()}>
+              <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => void handleRenameFile()}>
                 Rename
               </Button>
               <Button
                 variant="outline"
                 size="sm"
-                className="h-7 text-xs border-destructive/30 text-destructive hover:bg-destructive/10"
+                className="h-8 text-xs border-destructive/30 text-destructive hover:bg-destructive/10"
                 onClick={handleDeleteStandaloneWorkspace}
                 disabled={deletingSoloWorkspace}
               >
@@ -1839,33 +1844,37 @@ const Workspace = () => {
               </Button>
             </div>
           )}
-          <input ref={fileInputRef} type="file" accept=".java" onChange={handleUpload} className="hidden" />
-          <Button variant="ghost" size="sm" className="h-7 text-xs gap-1" onClick={() => navigate("/dashboard")}>
-            Dashboard
-          </Button>
-          <Button variant="ghost" size="sm" className="h-7 text-xs gap-1" onClick={() => fileInputRef.current?.click()}>
-            <Upload className="h-3 w-3" /> Upload
-          </Button>
-          <Button variant="ghost" size="sm" className="h-7 text-xs gap-1" onClick={handleDownload}>
-            <Download className="h-3 w-3" /> Download
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-7 text-xs gap-1"
-            onClick={() => void handleManualSave()}
-            disabled={savingWorkspace}
-          >
-            <Save className="h-3 w-3" /> {savingWorkspace ? "Saving..." : "Save"}
-          </Button>
-          <Button size="sm" className="h-7 text-xs gap-1" onClick={handleAnalyze} disabled={analyzing}>
-            <Zap className={`h-3 w-3 ${analyzing ? "animate-pulse-glow" : ""}`} />
-            {analyzing ? "Analyzing..." : "Analyze"}
-          </Button>
-        </div>
-      </Navbar>
 
-      <div className="flex-1 flex overflow-hidden">
+          <input ref={fileInputRef} type="file" accept=".java" onChange={handleUpload} className="hidden" />
+
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="ghost" size="sm" className="h-8 text-xs gap-1" onClick={() => navigate("/dashboard")}>
+              Dashboard
+            </Button>
+            <Button variant="ghost" size="sm" className="h-8 text-xs gap-1" onClick={() => fileInputRef.current?.click()}>
+              <Upload className="h-3 w-3" /> Upload
+            </Button>
+            <Button variant="ghost" size="sm" className="h-8 text-xs gap-1" onClick={handleDownload}>
+              <Download className="h-3 w-3" /> Download
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 text-xs gap-1"
+              onClick={() => void handleManualSave()}
+              disabled={savingWorkspace}
+            >
+              <Save className="h-3 w-3" /> {savingWorkspace ? "Saving..." : "Save"}
+            </Button>
+            <Button size="sm" className="h-8 text-xs gap-1" onClick={handleAnalyze} disabled={analyzing}>
+              <Zap className={`h-3 w-3 ${analyzing ? "animate-pulse-glow" : ""}`} />
+              {analyzing ? "Analyzing..." : "Analyze"}
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex-1 flex overflow-hidden gap-2 p-2">
         <Sidebar
           roomCode={isStandalone ? "STANDALONE" : room?.roomCode || roomId || "workspace"}
           roomName={isStandalone ? "Personal Workspace" : room?.roomName || "Workspace"}
@@ -1899,26 +1908,28 @@ const Workspace = () => {
           onDirectMergeVersion={handleDirectMergeVersion}
           onCompareMergeVersion={handleCompareMergeVersion}
         />
-        <EditorPanel
-          code={code}
-          fileName={activeFileName}
-          onChange={handleEditorCodeChange}
-          readOnly={!canEditActiveFile}
-          onSelectionChange={handleEditorSelectionChange}
-          remoteSelections={editorRemoteSelections}
-          issues={issues}
-        />
+        <div className="min-w-0 flex-1">
+          <EditorPanel
+            code={code}
+            fileName={activeFileName}
+            onChange={handleEditorCodeChange}
+            readOnly={!canEditActiveFile}
+            onSelectionChange={handleEditorSelectionChange}
+            remoteSelections={editorRemoteSelections}
+            issues={issues}
+          />
+        </div>
 
-        <div className="w-80 workspace-panel flex flex-col overflow-hidden shrink-0">
+        <div className="w-[20rem] xl:w-[22rem] workspace-panel rounded-xl flex flex-col overflow-hidden shrink-0 min-h-0">
           <Tabs defaultValue="analysis" className="flex flex-col h-full">
-            <div className="overflow-x-auto border-b border-border">
-              <TabsList className="w-max min-w-full rounded-none bg-transparent h-9 px-2 justify-start">
-                <TabsTrigger value="analysis" className="text-xs whitespace-nowrap data-[state=active]:bg-surface rounded-md h-6">Analysis</TabsTrigger>
-                <TabsTrigger value="issues" className="text-xs whitespace-nowrap data-[state=active]:bg-surface rounded-md h-6">Issues</TabsTrigger>
-                <TabsTrigger value="learning" className="text-xs whitespace-nowrap data-[state=active]:bg-surface rounded-md h-6">Learning</TabsTrigger>
-                <TabsTrigger value="comments" className="text-xs whitespace-nowrap data-[state=active]:bg-surface rounded-md h-6">Comments</TabsTrigger>
-                <TabsTrigger value="search" className="text-xs whitespace-nowrap data-[state=active]:bg-surface rounded-md h-6">Search</TabsTrigger>
-                <TabsTrigger value="activity" className="text-xs whitespace-nowrap data-[state=active]:bg-surface rounded-md h-6">Activity</TabsTrigger>
+            <div className="overflow-x-auto border-b border-border bg-card/60">
+              <TabsList className="w-max min-w-full rounded-none bg-transparent h-10 px-2 justify-start gap-1">
+                <TabsTrigger value="analysis" className="text-xs whitespace-nowrap data-[state=active]:bg-surface rounded-md h-7">Analysis</TabsTrigger>
+                <TabsTrigger value="issues" className="text-xs whitespace-nowrap data-[state=active]:bg-surface rounded-md h-7">Issues</TabsTrigger>
+                <TabsTrigger value="learning" className="text-xs whitespace-nowrap data-[state=active]:bg-surface rounded-md h-7">Learning</TabsTrigger>
+                <TabsTrigger value="comments" className="text-xs whitespace-nowrap data-[state=active]:bg-surface rounded-md h-7">Comments</TabsTrigger>
+                <TabsTrigger value="search" className="text-xs whitespace-nowrap data-[state=active]:bg-surface rounded-md h-7">Search</TabsTrigger>
+                <TabsTrigger value="activity" className="text-xs whitespace-nowrap data-[state=active]:bg-surface rounded-md h-7">Activity</TabsTrigger>
               </TabsList>
             </div>
             <ScrollArea className="flex-1">
